@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily VPN Optimizer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/router/vpn-optimizer/vpn-optimizer-daily.sh
+TimeoutStartSec=0

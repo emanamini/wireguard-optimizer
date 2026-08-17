@@ -1,0 +1,12 @@
+[Unit]
+Description=Run VPN health monitor every hour
+
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Persistent=yes
+
+
+[Install]
+WantedBy=timers.target

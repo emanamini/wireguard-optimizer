@@ -362,7 +362,7 @@ for CONFIG_FILE_PATH in "$SOURCE_DIR"/*.conf; do
     fi
 
 
-    ENDPOINT=$(echo "$ENDPOINT_LINE" | cut -d '=' -f 2- | xargs)
+    ENDPOINT=$(echo "$ENDPOINT_LINE" | cut -d '=' -f 2- | tr -d '\r' | xargs)
 
 
     if [ -z "$ENDPOINT" ]; then
@@ -375,36 +375,71 @@ for CONFIG_FILE_PATH in "$SOURCE_DIR"/*.conf; do
     log_info "Endpoint: $ENDPOINT"
 
 
-    # --------------------------------------------------------
-    # Separate endpoint host and port
-    # --------------------------------------------------------
+# --------------------------------------------------------
+# Separate endpoint host and port
+# --------------------------------------------------------
 
-    ENDPOINT_HOST="$ENDPOINT"
-    ENDPOINT_PORT=""
-
-
-    if [[ "$ENDPOINT" == *:* ]]; then
-        ENDPOINT_PORT="${ENDPOINT##*:}"
-        ENDPOINT_HOST="${ENDPOINT%:*}"
-    fi
+ENDPOINT_HOST="$ENDPOINT"
+ENDPOINT_PORT=""
 
 
-    if [ -z "$ENDPOINT_HOST" ]; then
-        log_error "Could not determine endpoint host."
-        log_error "Skipping $CONFIG_NAME."
+if [[ "$ENDPOINT" == *:* ]]; then
+
+    ENDPOINT_PORT="${ENDPOINT##*:}"
+    ENDPOINT_HOST="${ENDPOINT%:*}"
+
+
+    # ----------------------------------------------------
+    # Sanitize endpoint port
+    #
+    # Remove CR/LF characters that may exist when the
+    # configuration file uses Windows/CRLF line endings.
+    # ----------------------------------------------------
+
+    ENDPOINT_PORT=$(printf '%s' "$ENDPOINT_PORT" | tr -d '\r\n')
+
+
+    # ----------------------------------------------------
+    # Validate endpoint port format
+    # ----------------------------------------------------
+
+    if [[ ! "$ENDPOINT_PORT" =~ ^[0-9]+$ ]]; then
+        log_error "Invalid endpoint port: [$ENDPOINT_PORT]"
+        log_error "Port must contain digits only."
+        log_error "Skipping configuration: $CONFIG_NAME"
         continue
     fi
 
 
-    log_info "Endpoint host: $ENDPOINT_HOST"
+    # ----------------------------------------------------
+    # Validate endpoint port range
+    # ----------------------------------------------------
 
-
-    if [ -n "$ENDPOINT_PORT" ]; then
-        log_info "Endpoint port: $ENDPOINT_PORT"
-    else
-        log_warn "No endpoint port was detected."
+    if (( 10#$ENDPOINT_PORT < 1 || 10#$ENDPOINT_PORT > 65535 )); then
+        log_error "Invalid endpoint port: [$ENDPOINT_PORT]"
+        log_error "Port must be between 1 and 65535."
+        log_error "Skipping configuration: $CONFIG_NAME"
+        continue
     fi
 
+else
+
+    log_error "No endpoint port was detected: $ENDPOINT"
+    log_error "Skipping configuration: $CONFIG_NAME"
+    continue
+
+fi
+
+
+if [ -z "$ENDPOINT_HOST" ]; then
+    log_error "Could not determine endpoint host."
+    log_error "Skipping $CONFIG_NAME."
+    continue
+fi
+
+
+log_info "Endpoint host: $ENDPOINT_HOST"
+log_success "Valid endpoint port: $ENDPOINT_PORT"
 
     # --------------------------------------------------------
     # Check whether endpoint is already an IPv4 address
@@ -451,14 +486,20 @@ for CONFIG_FILE_PATH in "$SOURCE_DIR"/*.conf; do
         # Copy the original configuration unchanged
         # ----------------------------------------------------
 
-        OUTPUT_FILE="$TEMP_DIR/${ENDPOINT_IP}.conf"
+        OUTPUT_FILE="$TEMP_DIR/${ENDPOINT_IP}-${ENDPOINT_PORT}.conf"
 
+        OUTPUT_BASENAME=$(basename "$OUTPUT_FILE")
 
+        if [[ ! "$OUTPUT_BASENAME" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}-[0-9]+\.conf$ ]]; then
+            log_error "Generated candidate filename failed validation: [$OUTPUT_BASENAME]"
+            log_error "Skipping configuration: $CONFIG_NAME"
+            continue
+        fi
         if [ -f "$OUTPUT_FILE" ]; then
-            log_warn "Candidate already exists: ${ENDPOINT_IP}.conf"
+            log_warn "Candidate already exists: ${ENDPOINT_IP}-${ENDPOINT_PORT}.conf"
             log_warn "Replacing it with configuration: $CONFIG_NAME"
         else
-            log_info "Creating candidate: ${ENDPOINT_IP}.conf"
+            log_info "Creating candidate: ${ENDPOINT_IP}-${ENDPOINT_PORT}.conf"
         fi
 
 
@@ -570,14 +611,21 @@ for CONFIG_FILE_PATH in "$SOURCE_DIR"/*.conf; do
         # Create candidate configuration
         # ----------------------------------------------------
 
-        OUTPUT_FILE="$TEMP_DIR/${RESOLVED_IP}.conf"
+        OUTPUT_FILE="$TEMP_DIR/${RESOLVED_IP}-${ENDPOINT_PORT}.conf"
 
+        OUTPUT_BASENAME=$(basename "$OUTPUT_FILE")
+
+        if [[ ! "$OUTPUT_BASENAME" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}-[0-9]+\.conf$ ]]; then
+            log_error "Generated candidate filename failed validation: [$OUTPUT_BASENAME]"
+            log_error "Skipping configuration: $CONFIG_NAME"
+            continue
+fi
 
         if [ -f "$OUTPUT_FILE" ]; then
-            log_warn "Candidate already exists: ${RESOLVED_IP}.conf"
+            log_warn "Candidate already exists: ${RESOLVED_IP}-${ENDPOINT_PORT}.conf"
             log_warn "Replacing it with configuration: $CONFIG_NAME"
         else
-            log_info "Creating candidate: ${RESOLVED_IP}.conf"
+            log_info "Creating candidate: ${RESOLVED_IP}-${ENDPOINT_PORT}.conf"
         fi
 
 

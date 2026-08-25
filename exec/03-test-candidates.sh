@@ -183,7 +183,6 @@ select_interface_settings()
     FINAL_SIZE_MB="${DOWNLOAD_FINAL_SIZE_MB:-20}"
     FINAL_MIN_MBPS="${DOWNLOAD_FINAL_MIN_MBPS:-30}"
     FINAL_MAX_SECONDS="${DOWNLOAD_FINAL_MAX_SECONDS:-10}"
-    FINAL_MIN_MBPS="${DOWNLOAD_FINAL_MIN_MBPS:-30}"
 
     ALLOW_CONCURRENT_CONNECTIONS="${ALLOW_CONCURRENT_CONNECTIONS:-no}"
     VPN_PRODUCTION_COOLDOWN_SECONDS="${VPN_PRODUCTION_COOLDOWN_SECONDS:-5}"
@@ -569,6 +568,13 @@ download_test()
 
     early_size=$(stat -c '%s' "$TEMP_DOWNLOAD_FILE")
 
+    if [ "$early_size" -lt "$early_bytes" ]; then
+        warn "Early download incomplete: received $early_size bytes, expected at least $early_bytes bytes"
+        EARLY_REJECT_COUNT=$((EARLY_REJECT_COUNT + 1))
+        rm -f "$TEMP_DOWNLOAD_FILE"
+        return 1
+    fi
+
     if [ "$early_size" -le 0 ]; then
         warn "Early download produced no data"
         EARLY_REJECT_COUNT=$((EARLY_REJECT_COUNT + 1))
@@ -630,6 +636,14 @@ download_test()
         'BEGIN {print end-start}')
 
     final_size=$(stat -c '%s' "$TEMP_DOWNLOAD_FILE")
+
+
+    if [ "$final_size" -lt "$final_bytes" ]; then
+        warn "Final download incomplete: received $final_size bytes, expected at least $final_bytes bytes"
+        FINAL_REJECT_COUNT=$((FINAL_REJECT_COUNT + 1))
+        rm -f "$TEMP_DOWNLOAD_FILE"
+        return 1
+    fi
 
     if [ "$final_size" -le 0 ]; then
         warn "Final download produced no data"

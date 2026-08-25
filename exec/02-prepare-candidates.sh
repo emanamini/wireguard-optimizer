@@ -6,12 +6,25 @@
 # ============================================================
 #
 # PURPOSE
+#
 #   Prepare candidate WireGuard configurations for temporary
 #   testing.
 #
 #   The original candidate configurations are never modified.
 #
-#   For each candidate:
+#   Candidate identity is:
+#
+#       IPv4 + PORT
+#
+#   Therefore every valid candidate filename MUST be:
+#
+#       IPv4-PORT.conf
+#
+#   Example:
+#
+#       94.139.180.250-51860.conf
+#
+#   For each valid candidate:
 #
 #     1. Comment active DNS directives.
 #     2. Comment active PostUp directives.
@@ -35,6 +48,10 @@
 #
 #   /dev/shm/vpn-optimizer/tun0/*.conf
 #   /dev/shm/vpn-optimizer/tun1/*.conf
+#
+#   Every candidate filename MUST be:
+#
+#       IPv4-PORT.conf
 #
 # OUTPUT
 #
@@ -75,8 +92,16 @@ log_success()
 }
 
 
+# ------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------
+
 CONFIG_FILE="/etc/vpn-optimizer.conf"
 
+
+# ------------------------------------------------------------
+# Validate arguments
+# ------------------------------------------------------------
 
 if [ "$#" -eq 0 ]; then
     log_error "An interface argument is required."
@@ -86,7 +111,6 @@ if [ "$#" -eq 0 ]; then
     exit 1
 fi
 
-
 if [ "$#" -ne 1 ]; then
     log_error "This script accepts exactly one argument."
     log_error "The argument must be tun0 or tun1."
@@ -94,7 +118,6 @@ if [ "$#" -ne 1 ]; then
     log_error "Usage: $0 tun1"
     exit 1
 fi
-
 
 INTERFACE="$1"
 
@@ -114,6 +137,10 @@ fi
 log_info "Selected interface: $INTERFACE"
 
 
+# ------------------------------------------------------------
+# Load configuration
+# ------------------------------------------------------------
+
 if [ ! -f "$CONFIG_FILE" ]; then
     log_error "Configuration file not found: $CONFIG_FILE"
     exit 1
@@ -121,6 +148,10 @@ fi
 
 . "$CONFIG_FILE"
 
+
+# ------------------------------------------------------------
+# Directories
+# ------------------------------------------------------------
 
 SOURCE_DIR="$TEMP_BASE_DIR/$INTERFACE"
 OUTPUT_DIR="$TEMP_BASE_DIR/${INTERFACE}-tmp"
@@ -131,10 +162,127 @@ if [ ! -d "$SOURCE_DIR" ]; then
     exit 1
 fi
 
-
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
+
+# ------------------------------------------------------------
+# Validate candidate filename
+#
+# Required format:
+#
+#     IPv4-PORT.conf
+#
+# Example:
+#
+#     94.139.180.250-51860.conf
+# ------------------------------------------------------------
+
+validate_candidate_filename()
+{
+    local filename="$1"
+    local identity
+    local ip
+    local port
+    local octet
+    local octets
+    local value
+
+    # Must end in .conf.
+    case "$filename" in
+        *.conf)
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    identity="${filename%.conf}"
+
+    # Must contain exactly one final "-".
+    case "$identity" in
+        *-*)
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    ip="${identity%-*}"
+    port="${identity##*-}"
+
+    # IP and port must both exist.
+    if [ -z "$ip" ] || [ -z "$port" ]; then
+        return 1
+    fi
+
+    # --------------------------------------------------------
+    # Validate IPv4
+    # --------------------------------------------------------
+
+    # IPv4 must contain exactly four decimal octets.
+    IFS='.' read -r -a octets <<< "$ip"
+
+    if [ "${#octets[@]}" -ne 4 ]; then
+        return 1
+    fi
+
+    for octet in "${octets[@]}"; do
+
+        # Empty octet.
+        if [ -z "$octet" ]; then
+            return 1
+        fi
+
+        # Digits only.
+        case "$octet" in
+            *[!0-9]*)
+                return 1
+                ;;
+        esac
+
+        # No leading "+" or "-" is possible because of the
+        # digits-only check above.
+
+        value=$((10#$octet))
+
+        if [ "$value" -gt 255 ]; then
+            return 1
+        fi
+    done
+
+
+    # --------------------------------------------------------
+    # Validate port
+    # --------------------------------------------------------
+
+    # Port must contain digits only.
+    case "$port" in
+        *[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    # Port must not be empty.
+    if [ -z "$port" ]; then
+        return 1
+    fi
+
+    # Prevent arithmetic issues with unusual values.
+    # The filename has already been restricted to digits.
+    value=$((10#$port))
+
+    if [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
+        return 1
+    fi
+
+    return 0
+}
+
+
+# ------------------------------------------------------------
+# Prepare candidates
+# ------------------------------------------------------------
 
 for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
 
@@ -143,15 +291,39 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
     fi
 
     FILE_NAME=$(basename "$SOURCE_FILE")
+
+    # --------------------------------------------------------
+    # Candidate filename is now part of candidate identity.
+    #
+    # Do not allow malformed candidates into the temporary
+    # testing directory.
+    # --------------------------------------------------------
+
+    if ! validate_candidate_filename "$FILE_NAME"; then
+        log_warn "Skipping malformed candidate filename: $FILE_NAME"
+        continue
+    fi
+
     OUTPUT_FILE="$OUTPUT_DIR/$FILE_NAME"
 
 
+    # --------------------------------------------------------
+    # Prepare temporary WireGuard configuration.
+    #
+    # The source configuration is NEVER modified.
+    # --------------------------------------------------------
+
     awk '
+
     BEGIN {
         in_interface = 0
         table_written = 0
     }
 
+
+    # --------------------------------------------------------
+    # [Interface] section
+    # --------------------------------------------------------
 
     /^\[Interface\][[:space:]]*$/ {
         in_interface = 1
@@ -159,6 +331,10 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
         next
     }
 
+
+    # --------------------------------------------------------
+    # Any other section
+    # --------------------------------------------------------
 
     /^\[[^]]+\][[:space:]]*$/ {
         in_interface = 0
@@ -173,6 +349,7 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
             # ------------------------------------------------
             # Disable active DNS directives.
             # ------------------------------------------------
+
             if ($0 ~ /^[[:space:]]*DNS[[:space:]]*=/) {
                 print "# " $0
                 next
@@ -182,6 +359,7 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
             # ------------------------------------------------
             # Disable active PostUp directives.
             # ------------------------------------------------
+
             if ($0 ~ /^[[:space:]]*PostUp[[:space:]]*=/) {
                 print "# " $0
                 next
@@ -191,6 +369,7 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
             # ------------------------------------------------
             # Disable active PostDown directives.
             # ------------------------------------------------
+
             if ($0 ~ /^[[:space:]]*PostDown[[:space:]]*=/) {
                 print "# " $0
                 next
@@ -200,11 +379,14 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
             # ------------------------------------------------
             # Handle active Table directive.
             # ------------------------------------------------
+
             if ($0 ~ /^[[:space:]]*Table[[:space:]]*=/) {
+
                 if (!table_written) {
                     print "Table = off"
                     table_written = 1
                 }
+
                 next
             }
 
@@ -212,11 +394,14 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
             # ------------------------------------------------
             # Handle commented Table directive.
             # ------------------------------------------------
+
             if ($0 ~ /^[[:space:]]*#[[:space:]]*Table[[:space:]]*=/) {
+
                 if (!table_written) {
                     print "Table = off"
                     table_written = 1
                 }
+
                 next
             }
 
@@ -224,7 +409,9 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
             # ------------------------------------------------
             # Add Table = off immediately after Address.
             # ------------------------------------------------
+
             if ($0 ~ /^[[:space:]]*Address[[:space:]]*=/) {
+
                 print
 
                 if (!table_written) {
@@ -238,8 +425,27 @@ for SOURCE_FILE in "$SOURCE_DIR"/*.conf; do
 
         print
     }
+
     ' "$SOURCE_FILE" > "$OUTPUT_FILE"
 
+
+    # --------------------------------------------------------
+    # Final output validation.
+    #
+    # Make absolutely sure the temporary filename still
+    # represents a valid IPv4 + port candidate.
+    # --------------------------------------------------------
+
+    if [ ! -f "$OUTPUT_FILE" ]; then
+        log_error "Failed to create temporary candidate: $FILE_NAME"
+        exit 1
+    fi
+
+    if [ "$(basename "$OUTPUT_FILE")" != "$FILE_NAME" ]; then
+        log_error "Temporary candidate filename mismatch: $FILE_NAME"
+        rm -f "$OUTPUT_FILE"
+        continue
+    fi
 
     log_info "Prepared: $FILE_NAME"
 
@@ -257,36 +463,47 @@ cleanup_temp_interface()
     if ip link show "$TEMP_INTERFACE" >/dev/null 2>&1; then
 
         log_warn "Temporary interface exists: $TEMP_INTERFACE"
+
         log_info "Stopping wg-quick service: wg-quick@$TEMP_INTERFACE.service"
 
-        systemctl stop "wg-quick@$TEMP_INTERFACE.service" >/dev/null 2>&1 || true
+        systemctl stop "wg-quick@$TEMP_INTERFACE.service" \
+            >/dev/null 2>&1 || true
 
         if ip link show "$TEMP_INTERFACE" >/dev/null 2>&1; then
 
             log_warn "Interface still exists after systemd stop: $TEMP_INTERFACE"
+
             log_info "Removing interface with ip command: $TEMP_INTERFACE"
 
-            ip link delete "$TEMP_INTERFACE" >/dev/null 2>&1 || true
+            ip link delete "$TEMP_INTERFACE" \
+                >/dev/null 2>&1 || true
         fi
 
         if ip link show "$TEMP_INTERFACE" >/dev/null 2>&1; then
+
             log_error "Failed to remove temporary interface: $TEMP_INTERFACE"
+
             return 1
         fi
 
         log_success "Temporary interface removed: $TEMP_INTERFACE"
 
     else
+
         log_info "Temporary interface is already free: $TEMP_INTERFACE"
+
     fi
 }
 
+
+# ------------------------------------------------------------
+# Validate temporary interface configuration
+# ------------------------------------------------------------
 
 if [ -z "$TUN0_TEMP_INTERFACE" ]; then
     log_error "TUN0_TEMP_INTERFACE is not set in $CONFIG_FILE"
     exit 1
 fi
-
 
 if [ -z "$TUN1_TEMP_INTERFACE" ]; then
     log_error "TUN1_TEMP_INTERFACE is not set in $CONFIG_FILE"
@@ -294,11 +511,19 @@ if [ -z "$TUN1_TEMP_INTERFACE" ]; then
 fi
 
 
+# ------------------------------------------------------------
+# Clean up both temporary interfaces
+# ------------------------------------------------------------
+
 cleanup_temp_interface "$TUN0_TEMP_INTERFACE"
+
 cleanup_temp_interface "$TUN1_TEMP_INTERFACE"
 
 
+# ------------------------------------------------------------
+# Completion
+# ------------------------------------------------------------
+
 log_success "Candidate preparation completed."
+log_info "Input directory:  $SOURCE_DIR"
 log_info "Output directory: $OUTPUT_DIR"
-
-

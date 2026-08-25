@@ -216,7 +216,142 @@ get_live_endpoint_ip() {
 
     printf '%s\n' "$endpoint"
 }
+# ============================================================
+# GET CONFIGURED WIREGUARD ENDPOINT
+#
+# Returns:
+#
+#   94.139.180.250:51860
+#
+# from:
+#
+#   Endpoint = 94.139.180.250:51860
+#
+# This reads the configuration file directly.
+#
+# It therefore works even when the WireGuard interface is DOWN.
+# ============================================================
 
+get_configured_endpoint() {
+
+    local iface="$1"
+    local config_file="$WIREGUARD_DIR/${iface}.conf"
+    local endpoint=""
+
+    if [[ ! -f "$config_file" ]]; then
+        log_warn "WireGuard configuration not found:"
+        log_warn "$config_file"
+        return 0
+    fi
+
+    endpoint="$(
+        awk -F '=' '
+            /^[[:space:]]*Endpoint[[:space:]]*=/ {
+                value=$2
+                sub(/^[[:space:]]*/, "", value)
+                sub(/[[:space:]]*$/, "", value)
+                print value
+                exit
+            }
+        ' "$config_file"
+    )"
+
+    if [[ -z "$endpoint" ]]; then
+        log_warn "No Endpoint found in:"
+        log_warn "$config_file"
+        return 0
+    fi
+
+    printf '%s\n' "$endpoint"
+}
+
+# ============================================================
+# GET ENDPOINT FROM ARBITRARY WIREGUARD CONFIGURATION FILE
+# ============================================================
+
+get_configured_endpoint_from_file() {
+
+    local config_file="$1"
+    local endpoint=""
+
+    [[ -f "$config_file" ]] || return 0
+
+    endpoint="$(
+        awk -F '=' '
+            /^[[:space:]]*Endpoint[[:space:]]*=/ {
+                value=$2
+                sub(/^[[:space:]]*/, "", value)
+                sub(/[[:space:]]*$/, "", value)
+                print value
+                exit
+            }
+        ' "$config_file"
+    )"
+
+    printf '%s\n' "$endpoint"
+}
+
+# ============================================================
+# EXTRACT IP FROM ENDPOINT
+#
+# IPv4:
+#
+#   94.139.180.250:51860
+#   -> 94.139.180.250
+#
+# IPv6:
+#
+#   [2001:db8::1]:51860
+#   -> 2001:db8::1
+# ============================================================
+
+get_endpoint_ip() {
+
+    local endpoint="$1"
+
+    if [[ "$endpoint" == \[*\]:* ]]; then
+
+        endpoint="${endpoint#\[}"
+        endpoint="${endpoint%\]:*}"
+
+    else
+
+        endpoint="${endpoint%:*}"
+
+    fi
+
+    printf '%s\n' "$endpoint"
+}
+
+
+# ============================================================
+# EXTRACT PORT FROM ENDPOINT
+#
+# IPv4:
+#
+#   94.139.180.250:51860
+#   -> 51860
+#
+# IPv6:
+#
+#   [2001:db8::1]:51860
+#   -> 51860
+# ============================================================
+
+get_endpoint_port() {
+
+    local endpoint="$1"
+
+    if [[ "$endpoint" == \[*\]:* ]]; then
+
+        printf '%s\n' "${endpoint##*]:}"
+
+    else
+
+        printf '%s\n' "${endpoint##*:}"
+
+    fi
+}
 # ============================================================
 # GET DOMAIN FOR IP
 #
@@ -245,20 +380,50 @@ get_domain_for_ip() {
 #
 # 0 = conflict
 # 1 = no conflict
+#
+# Conflict modes:
+#
+#   domain
+#       Candidate and other interface belong to the same domain.
+#
+#   ip
+#       Candidate and other interface use the same endpoint IP.
+#
+#   port
+#       Candidate and other interface use the same IP + port.
+#
+# IMPORTANT:
+#
+# The other interface endpoint comes from its WireGuard
+# configuration file, NOT from the live interface.
+#
+# This is required because concurrent connections may be
+# disabled and both production interfaces may be DOWN.
 # ============================================================
 
 candidate_conflicts() {
 
     local candidate_ip="$1"
-    local other_ip="$2"
+    local candidate_port="$2"
+    local other_endpoint="$3"
+
+    local other_ip=""
+    local other_port=""
 
     # --------------------------------------------------------
     # No endpoint on the other interface.
     # --------------------------------------------------------
 
-    if [[ -z "$other_ip" ]]; then
+    if [[ -z "$other_endpoint" ]]; then
         return 1
     fi
+
+    # --------------------------------------------------------
+    # Extract other endpoint IP and port.
+    # --------------------------------------------------------
+
+    other_ip="$(get_endpoint_ip "$other_endpoint")"
+    other_port="$(get_endpoint_port "$other_endpoint")"
 
     # ========================================================
     # IP MODE
@@ -269,6 +434,45 @@ candidate_conflicts() {
         if [[ "$candidate_ip" == "$other_ip" ]]; then
 
             log_info "Conflict: same endpoint IP"
+            log_info "Candidate: $candidate_ip:$candidate_port"
+            log_info "Other:     $other_ip:$other_port"
+
+            return 0
+        fi
+
+        return 1
+    fi
+
+    # ========================================================
+    # PORT MODE
+    #
+    # Despite the name "port", this intentionally compares:
+    #
+    #     IP + PORT
+    #
+    # Therefore:
+    #
+    #     1.2.3.4:51820
+    #     1.2.3.4:51820
+    #
+    # conflicts.
+    #
+    # But:
+    #
+    #     1.2.3.4:51820
+    #     1.2.3.4:51840
+    #
+    # does NOT conflict.
+    # ========================================================
+
+    if [[ "$CANDIDATE_CONFLICT_MODE" == "port" ]]; then
+
+        if [[ "$candidate_ip" == "$other_ip" &&
+              "$candidate_port" == "$other_port" ]]; then
+
+            log_info "Conflict: same endpoint IP and port"
+            log_info "Candidate: $candidate_ip:$candidate_port"
+            log_info "Other:     $other_ip:$other_port"
 
             return 0
         fi
@@ -324,8 +528,14 @@ candidate_conflicts() {
         return 1
     fi
 
-    log_error "Unknown CANDIDATE_CONFLICT_MODE: $CANDIDATE_CONFLICT_MODE"
+    # ========================================================
+    # UNKNOWN MODE
+    # ========================================================
 
+    log_error "Unknown CANDIDATE_CONFLICT_MODE:"
+    log_error "$CANDIDATE_CONFLICT_MODE"
+
+    # Fail closed.
     return 0
 }
 
@@ -351,19 +561,19 @@ select_winner() {
         return 1
     fi
 
-    local other_ip=""
+    local other_endpoint=""
 
-    other_ip="$(get_live_endpoint_ip "$OTHER_INTERFACE")"
+    other_endpoint="$(get_configured_endpoint "$OTHER_INTERFACE")"
 
     log_info "Other interface: $OTHER_INTERFACE"
 
-    if [[ -n "$other_ip" ]]; then
+    if [[ -n "$other_endpoint" ]]; then
 
-        log_info "Other live endpoint: $other_ip"
+        log_info "Other configured endpoint: $other_endpoint"
 
     else
 
-        log_info "Other interface has no live endpoint"
+        log_info "Other interface has no configured endpoint"
 
     fi
 
@@ -381,34 +591,57 @@ select_winner() {
 
         [[ -z "$config" ]] && continue
 
-        local candidate_file="$CANDIDATE_DIR/$config"
-        local candidate_ip="${config%.conf}"
+    local candidate_file="$CANDIDATE_DIR/$config"
+    local candidate_endpoint=""
+    local candidate_ip=""
+    local candidate_port=""
 
         log_info "--------------------------------------------"
+
         log_info "Candidate: $config"
+
         log_info "Speed:     $speed"
+
         log_info "Timestamp: $timestamp"
-        log_info "Endpoint:  $candidate_ip"
 
         # ----------------------------------------------------
         # Candidate file must exist.
         # ----------------------------------------------------
 
         if [[ ! -f "$candidate_file" ]]; then
-
             log_warn "Candidate configuration missing"
-
             continue
         fi
+
+        # ----------------------------------------------------
+        # Read candidate endpoint directly from its configuration.
+        # ----------------------------------------------------
+
+        candidate_endpoint="$(get_configured_endpoint_from_file "$candidate_file")"
+
+        if [[ -z "$candidate_endpoint" ]]; then
+            log_warn "Candidate configuration contains no Endpoint"
+            continue
+        fi
+
+        candidate_ip="$(get_endpoint_ip "$candidate_endpoint")"
+
+        candidate_port="$(get_endpoint_port "$candidate_endpoint")"
+
+        log_info "Endpoint:  $candidate_endpoint"
+        log_info "IP:        $candidate_ip"
+        log_info "Port:      $candidate_port"
 
         # ----------------------------------------------------
         # Check conflict.
         # ----------------------------------------------------
 
-        if candidate_conflicts "$candidate_ip" "$other_ip"; then
+        if candidate_conflicts \
+            "$candidate_ip" \
+            "$candidate_port" \
+            "$other_endpoint"; then
 
             log_info "Candidate rejected"
-
             continue
         fi
 
@@ -834,7 +1067,8 @@ log_info "Cooldown:      ${VPN_TEST_COOLDOWN_SECONDS}s"
 # ============================================================
 
 if [[ "$CANDIDATE_CONFLICT_MODE" != "ip" &&
-      "$CANDIDATE_CONFLICT_MODE" != "domain" ]]; then
+      "$CANDIDATE_CONFLICT_MODE" != "domain" &&
+      "$CANDIDATE_CONFLICT_MODE" != "port" ]]; then
 
     log_error "Invalid CANDIDATE_CONFLICT_MODE:"
     log_error "$CANDIDATE_CONFLICT_MODE"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ============================================================
-# VPN Optimizer
+# WireGuard Optimizer
 # Module: 00-endpoint-route.sh
 # ============================================================
 #
@@ -25,10 +25,10 @@
 #   Rules with priority >= 1000 are NEVER touched.
 #
 # PERSISTENT OUTPUT:
-#   /opt/router/vpn-optimizer/state/endpoint-ips.txt
+#   $STATE_DIR/endpoint-ips.txt
 #
 # FAILURE REPORT:
-#   /opt/router/vpn-optimizer/state/endpoint-route-report.txt
+#   $STATE_DIR/endpoint-route-report.txt
 #
 # ============================================================
 
@@ -39,14 +39,16 @@ set -o pipefail
 # Constants
 # ============================================================
 
-CONFIG_FILE="/etc/vpn-optimizer.conf"
+CONFIG_FILE="/etc/wg-optimizer.conf"
 
-STATE_DIR="/opt/router/vpn-optimizer/state"
+CONFIG_FILE="/etc/wg-optimizer.conf"
 
-ENDPOINT_IPS_FILE="$STATE_DIR/endpoint-ips.txt"
-REPORT_FILE="$STATE_DIR/endpoint-route-report.txt"
+STATE_DIR=""
 
-TEMP_DIR="/dev/shm/vpn-optimizer-endpoint-route"
+ENDPOINT_IPS_FILE=""
+REPORT_FILE=""
+
+TEMP_DIR="/dev/shm/wg-optimizer-endpoint-route"
 
 INTERFACE="wan"
 TABLE_NAME="irtr"
@@ -118,7 +120,7 @@ write_failure_report()
     : > "$TEMP_REPORT" 2>/dev/null || true
 
     {
-        echo "VPN Optimizer - Endpoint Route Report"
+        echo "WireGuard Optimizer - Endpoint Route Report"
         echo "======================================"
         echo
         echo "Status: FAILED"
@@ -248,6 +250,7 @@ require_command()
     fi
 }
 
+
 load_configuration()
 {
     if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -260,6 +263,13 @@ load_configuration()
     if [[ -z "${BASE_DIR:-}" ]]; then
         fail "BASE_DIR is not defined in $CONFIG_FILE"
     fi
+
+    if [[ -z "${STATE_DIR:-}" ]]; then
+        fail "STATE_DIR is not defined in $CONFIG_FILE"
+    fi
+
+    ENDPOINT_IPS_FILE="$STATE_DIR/endpoint-ips.txt"
+    REPORT_FILE="$STATE_DIR/endpoint-route-report.txt"
 }
 
 validate_environment()

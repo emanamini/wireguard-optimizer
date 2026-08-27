@@ -1,20 +1,34 @@
 #!/usr/bin/env bash
 
 # ============================================================
-# VPN Optimizer
+# WireGuard Optimizer
 # Master Script
 # ============================================================
 #
 # USAGE:
 #
-#   sudo ./vpn-optimizer.sh tun0
+#   sudo ./wg-optimizer.sh tun0
 #       Run optimizer for tun0.
 #
-#   sudo ./vpn-optimizer.sh tun1
+#   sudo ./wg-optimizer.sh tun1
 #       Run optimizer for tun1.
 #
-#   sudo ./vpn-optimizer.sh both
+#   sudo ./wg-optimizer.sh both
 #       Run optimizer for tun0 and tun1.
+#
+# WORKFLOW:
+#
+#   00-endpoint-route.sh
+#       Runs once per optimizer invocation.
+#
+#   For each selected interface:
+#
+#       01-config-manager.sh
+#       02-candidate-conflict-filter.sh
+#       03-prepare-candidates.sh
+#       04-test-candidates.sh
+#       05-deploy-winner.sh
+#       06-cleanup.sh
 #
 # ============================================================
 
@@ -25,11 +39,11 @@ set -o pipefail
 # Configuration
 # ============================================================
 
-SCRIPT_DIR="/opt/router/vpn-optimizer/exec"
+SCRIPT_DIR="/opt/router/wg-optimizer/exec"
 
 SLEEP_BETWEEN_SCRIPTS=2
 
-CONFIG_FILE="/etc/vpn-optimizer.conf"
+CONFIG_FILE="/etc/wg-optimizer.conf"
 
 # ============================================================
 # Logging
@@ -110,6 +124,7 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     exit 1
 fi
 
+# shellcheck disable=SC1090
 source "$CONFIG_FILE"
 
 # ============================================================
@@ -124,6 +139,15 @@ TUN1_WATCHER_WAS_ACTIVE=0
 
 SERVICES_STATE_CAPTURED=0
 SERVICES_STATE_RESTORED=0
+
+# ============================================================
+# Validate configuration variables
+# ============================================================
+
+if [[ -z "${ALLOW_CONCURRENT_CONNECTIONS:-}" ]]; then
+    log_error "ALLOW_CONCURRENT_CONNECTIONS is missing from $CONFIG_FILE"
+    exit 1
+fi
 
 # ============================================================
 # Validate endpoint route scope
@@ -249,9 +273,8 @@ stop_concurrent_services()
 # ============================================================
 # Restore original service state
 #
-# This function is intentionally safe to call from EXIT trap.
-# It attempts to restore BOTH services even if one restoration
-# fails.
+# This function is safe to call from the EXIT trap.
+# Both services are restored independently.
 # ============================================================
 
 restore_concurrent_services()
@@ -336,23 +359,14 @@ restore_concurrent_services()
 
 # ============================================================
 # Always restore service state when the master exits
-#
-# This covers:
-#   - successful completion
-#   - module failure
-#   - explicit exit
-#   - SIGINT / Ctrl+C
-#   - unexpected script termination
 # ============================================================
 
 trap 'restore_concurrent_services' EXIT
 
 # ============================================================
-# Run endpoint-route.sh
+# Run Script 00
 #
-# This function is intentionally separate from run_module().
-#
-# It runs exactly ONCE per master invocation.
+# This runs exactly ONCE per master invocation.
 # ============================================================
 
 run_endpoint_route()
@@ -379,33 +393,31 @@ run_endpoint_route()
     case "$ENDPOINT_ROUTE_SCOPE" in
 
         both)
-            # No argument = tun0 + tun1
+
+            # No argument means tun0 + tun1.
             if ! "$script_path"; then
                 log_error "Module failed: $script"
-                log_error "VPN Optimizer stopped."
+                log_error "WireGuard Optimizer stopped."
                 exit 1
             fi
             ;;
 
         tun0)
+
             if ! "$script_path" tun0; then
                 log_error "Module failed: $script"
-                log_error "VPN Optimizer stopped."
+                log_error "WireGuard Optimizer stopped."
                 exit 1
             fi
             ;;
 
         tun1)
+
             if ! "$script_path" tun1; then
                 log_error "Module failed: $script"
-                log_error "VPN Optimizer stopped."
+                log_error "WireGuard Optimizer stopped."
                 exit 1
             fi
-            ;;
-
-        *)
-            log_error "Invalid endpoint route scope: $ENDPOINT_ROUTE_SCOPE"
-            exit 1
             ;;
 
     esac
@@ -446,12 +458,14 @@ run_module()
     echo "============================================================"
 
     if ! "$script_path" "$interface"; then
+
         echo
         echo "============================================================"
         log_error "Module failed: $script"
         log_error "Interface: $interface"
-        log_error "VPN Optimizer stopped."
+        log_error "WireGuard Optimizer stopped."
         echo "============================================================"
+
         exit 1
     fi
 
@@ -472,55 +486,109 @@ run_interface()
 
     echo
     echo "############################################################"
-    echo "# VPN Optimizer"
+    echo "# WireGuard Optimizer"
     echo "# Interface: $interface"
     echo "############################################################"
     echo
 
     log_info "Starting workflow for $interface"
 
-    run_module "01" "01-config-manager.sh" "$interface"
-    run_module "02" "02-prepare-candidates.sh" "$interface"
-    run_module "03" "03-test-candidates.sh" "$interface"
-    run_module "04" "04-deploy-winner.sh" "$interface"
-
     # --------------------------------------------------------
-    # Script 05 is the final stage for this interface.
-    # No sleep is required after Script 05.
+    # Script 01
     # --------------------------------------------------------
 
-    local script_path="$SCRIPT_DIR/05-cleanup.sh"
+    run_module \
+        "01" \
+        "01-config-manager.sh" \
+        "$interface"
 
-    if [[ ! -f "$script_path" ]]; then
-        log_error "Missing module: $script_path"
-        exit 1
-    fi
+    # --------------------------------------------------------
+    # Script 02
+    # --------------------------------------------------------
 
-    if [[ ! -x "$script_path" ]]; then
-        log_error "Module is not executable: $script_path"
-        exit 1
-    fi
+    run_module \
+        "02" \
+        "02-candidate-conflict-filter.sh" \
+        "$interface"
 
-    echo
-    echo "============================================================"
-    echo "[05] Starting: 05-cleanup.sh"
-    echo "Interface: $interface"
-    echo "============================================================"
+    # --------------------------------------------------------
+    # Script 03
+    # --------------------------------------------------------
 
-    if ! "$script_path" "$interface"; then
-        echo
-        echo "============================================================"
-        log_error "Module failed: 05-cleanup.sh"
-        log_error "Interface: $interface"
-        log_error "VPN Optimizer stopped."
-        echo "============================================================"
-        exit 1
-    fi
+    run_module \
+        "03" \
+        "03-prepare-candidates.sh" \
+        "$interface"
 
-    echo
-    log_success "Module completed: 05-cleanup.sh"
+    # --------------------------------------------------------
+    # Script 04
+    # --------------------------------------------------------
+
+    run_module \
+        "04" \
+        "04-test-candidates.sh" \
+        "$interface"
+
+    # --------------------------------------------------------
+    # Script 05
+    # --------------------------------------------------------
+
+    run_module \
+        "05" \
+        "05-deploy-winner.sh" \
+        "$interface"
+
+    # --------------------------------------------------------
+    # Script 06
+    #
+    # Final cleanup and verification.
+    #
+    # Script 06 removes only interface-specific temporary
+    # workspace.
+    #
+    # Persistent speed and endpoint state files are NOT
+    # deleted by Script 06.
+    # --------------------------------------------------------
+
+    run_module \
+        "06" \
+        "06-cleanup.sh" \
+        "$interface"
+
     log_success "Workflow completed for $interface"
 }
+
+# ============================================================
+# Remove interface-specific speed state
+# ============================================================
+
+cleanup_speed_state()
+{
+    local interface="$1"
+    local state_file="$STATE_DIR/${interface}-speed-state.txt"
+
+    if [[ -f "$state_file" ]]; then
+        rm -f "$state_file"
+        log_success "Removed: $state_file"
+    else
+        log_info "Not found: $state_file"
+    fi
+}
+
+# ============================================================
+# Remove global run state
+# ============================================================
+
+for interface in "${INTERFACES[@]}"; do
+    cleanup_speed_state "$interface"
+done
+
+if [[ -f "$STATE_DIR/ip-domain-state.txt" ]]; then
+    rm -f "$STATE_DIR/ip-domain-state.txt"
+    log_success "Removed: $STATE_DIR/ip-domain-state.txt"
+else
+    log_info "Not found: $STATE_DIR/ip-domain-state.txt"
+fi
 
 # ============================================================
 # Main
@@ -528,7 +596,7 @@ run_interface()
 
 echo
 echo "============================================================"
-echo " VPN Optimizer Master"
+echo " WireGuard Optimizer Master"
 echo "============================================================"
 
 log_info "Run mode: $1"
@@ -542,11 +610,13 @@ log_info "Sleep between modules: ${SLEEP_BETWEEN_SCRIPTS}s"
 capture_service_state
 
 if [[ "$ALLOW_CONCURRENT_CONNECTIONS" == "no" ]]; then
+
     if ! stop_concurrent_services; then
         log_error "Could not safely stop required VPN services."
-        log_error "VPN Optimizer will not start."
+        log_error "WireGuard Optimizer will not start."
         exit 1
     fi
+
 fi
 
 # ============================================================
@@ -567,9 +637,13 @@ for interface in "${INTERFACES[@]}"; do
     run_interface "$interface"
 done
 
+# ============================================================
+# Final result
+# ============================================================
+
 echo
 echo "============================================================"
-log_success "VPN Optimizer completed successfully."
+log_success "WireGuard Optimizer completed successfully."
 log_success "Run mode: $1"
 echo "============================================================"
 echo

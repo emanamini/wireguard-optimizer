@@ -1,5 +1,5 @@
 [Unit]
-Description=Run VPN health monitor every hour
+Description=Run WireGuard health monitor every hour
 
 
 [Timer]

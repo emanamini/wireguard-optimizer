@@ -1,27 +1,17 @@
 #!/usr/bin/env bash
 
 # ============================================================
-# VPN Optimizer
-# Module: vpn-health-monitor.sh
+# WireGuard Optimizer
+# Module: wg-health-monitor.sh
 # ============================================================
 #
 # PURPOSE
-#   Check the health of a running production VPN interface.
+#   Check the health of a running production WireGuard interface.
 #
 #   Health consists of:
 #
 #       1. Download speed
 #       2. Optional ping reliability
-#
-#   Ping checking is enabled when:
-#
-#       HEALTH_CHECK_PING=y
-#       HEALTH_CHECK_PING=Y
-#       HEALTH_CHECK_PING=yes
-#       HEALTH_CHECK_PING=Yes
-#       HEALTH_CHECK_PING=YES
-#
-#   Any other value disables ping checking.
 #
 #   A single bad health check does NOT trigger optimization.
 #
@@ -31,28 +21,39 @@
 #   Only when every health attempt is unhealthy is the optimizer
 #   started.
 #
-# USAGE
-#
-#   sudo /opt/router/vpn-optimizer/vpn-health-monitor.sh tun0
-#   sudo /opt/router/vpn-optimizer/vpn-health-monitor.sh tun1
-#
 # ============================================================
 
 set -u
 
 # ============================================================
-# PATHS
+# CONFIGURATION
 # ============================================================
 
-CONFIG_FILE="/etc/vpn-optimizer.conf"
+CONFIG_FILE="/etc/wg-optimizer.conf"
 
-VPN_OPTIMIZER_ROOT="/opt/router/vpn-optimizer"
-OPTIMIZER="$VPN_OPTIMIZER_ROOT/vpn-optimizer.sh"
+if [ ! -f "$CONFIG_FILE" ]; then
+    printf '[ERROR] Configuration file does not exist: %s\n' "$CONFIG_FILE" >&2
+    exit 1
+fi
 
-LOG_DIR="$VPN_OPTIMIZER_ROOT/log"
-LOG_FILE="$LOG_DIR/vpn-health-monitor.log"
+# shellcheck disable=SC1090
+source "$CONFIG_FILE"
 
-DOWNLOAD_TEST_DIR="/dev/shm/vpn-optimizer"
+# ============================================================
+# PATHS
+# ============================================================
+#
+# All project paths come from wg-optimizer.conf.
+#
+# BASE_DIR
+# LOG_DIR
+# TEMP_BASE_DIR
+#
+# ============================================================
+
+OPTIMIZER="$BASE_DIR/wg-optimizer.sh"
+LOG_FILE="$LOG_DIR/wg-health-monitor.log"
+DOWNLOAD_TEST_DIR="$TEMP_BASE_DIR"
 
 # ============================================================
 # LOGGING
@@ -60,11 +61,12 @@ DOWNLOAD_TEST_DIR="/dev/shm/vpn-optimizer"
 
 log()
 {
-    level="$1"
-    message="$2"
+    local level="$1"
+    local message="$2"
 
     mkdir -p "$LOG_DIR"
 
+    local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     printf '%s [%s] %s\n' \
@@ -88,6 +90,8 @@ log_error()
 {
     log "ERROR" "$1"
 }
+
+log_info "Loaded configuration: $CONFIG_FILE"
 
 # ============================================================
 # INTERFACE
@@ -114,18 +118,28 @@ case "$INTERFACE" in
 esac
 
 # ============================================================
-# CONFIGURATION
+# REQUIRED PATH VALIDATION
 # ============================================================
 
-if [ ! -f "$CONFIG_FILE" ]; then
-    log_error "Configuration file does not exist: $CONFIG_FILE"
+if [ -z "${BASE_DIR:-}" ]; then
+    log_error "BASE_DIR is not configured"
     exit 1
 fi
 
-# shellcheck disable=SC1090
-source "$CONFIG_FILE"
+if [ -z "${LOG_DIR:-}" ]; then
+    log_error "LOG_DIR is not configured"
+    exit 1
+fi
 
-log_info "Loaded configuration: $CONFIG_FILE"
+if [ -z "${TEMP_BASE_DIR:-}" ]; then
+    log_error "TEMP_BASE_DIR is not configured"
+    exit 1
+fi
+
+if [ ! -x "$OPTIMIZER" ]; then
+    log_error "Optimizer is missing or not executable: $OPTIMIZER"
+    exit 1
+fi
 
 # ============================================================
 # HEALTH CHECK PING SWITCH
@@ -320,6 +334,10 @@ trap cleanup EXIT
 
 run_ping_test()
 {
+    local ping_output
+    local packet_loss
+    local average_latency
+
     ping_output=""
 
     if ! ping_output=$(ping \
@@ -364,31 +382,20 @@ run_ping_test()
         return 1
     fi
 
-    log_info \
-        "$INTERFACE: ping packet loss ${packet_loss}%"
+    log_info "$INTERFACE: ping packet loss ${packet_loss}%"
+    log_info "$INTERFACE: ping average latency ${average_latency} ms"
 
-    log_info \
-        "$INTERFACE: ping average latency ${average_latency} ms"
-
-    if awk \
-        "BEGIN {
-            exit !($packet_loss <= $HEALTH_MAX_PACKET_LOSS_PERCENT)
-        }"
+    if ! awk \
+        "BEGIN {exit !($packet_loss <= $HEALTH_MAX_PACKET_LOSS_PERCENT)}"
     then
-        :
-    else
         log_warn \
             "$INTERFACE: ping unhealthy - packet loss ${packet_loss}% > ${HEALTH_MAX_PACKET_LOSS_PERCENT}%"
         return 1
     fi
 
-    if awk \
-        "BEGIN {
-            exit !($average_latency <= $HEALTH_MAX_AVERAGE_LATENCY_MS)
-        }"
+    if ! awk \
+        "BEGIN {exit !($average_latency <= $HEALTH_MAX_AVERAGE_LATENCY_MS)}"
     then
-        :
-    else
         log_warn \
             "$INTERFACE: ping unhealthy - latency ${average_latency} ms > ${HEALTH_MAX_AVERAGE_LATENCY_MS} ms"
         return 1
@@ -405,6 +412,14 @@ run_ping_test()
 
 run_download_test()
 {
+    local test_bytes
+    local start_time
+    local end_time
+    local elapsed_seconds
+    local curl_status
+    local downloaded_bytes
+    local speed
+
     test_bytes=$((HEALTH_TEST_SIZE_MB * 1024 * 1024))
 
     rm -f "$TEMP_DOWNLOAD_FILE"
@@ -434,30 +449,18 @@ run_download_test()
         'BEGIN {print end - start}')
 
     if [ "$curl_status" -ne 0 ]; then
-
-        log_warn \
-            "$INTERFACE: download test failed"
-
-        rm -f "$TEMP_DOWNLOAD_FILE"
-
+        log_warn "$INTERFACE: download test failed"
         return 1
     fi
 
     if ! [[ "$elapsed_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-
         log_warn \
             "$INTERFACE: invalid download elapsed time: $elapsed_seconds"
-
-        rm -f "$TEMP_DOWNLOAD_FILE"
-
         return 1
     fi
 
-    if awk "BEGIN {exit !($elapsed_seconds > 0)}"; then
-        :
-    else
+    if ! awk "BEGIN {exit !($elapsed_seconds > 0)}"; then
         log_warn "$INTERFACE: download elapsed time is zero"
-        rm -f "$TEMP_DOWNLOAD_FILE"
         return 1
     fi
 
@@ -466,11 +469,7 @@ run_download_test()
     if ! [[ "$downloaded_bytes" =~ ^[0-9]+$ ]] ||
        [ "$downloaded_bytes" -le 0 ]; then
 
-        log_warn \
-            "$INTERFACE: download test produced no data"
-
-        rm -f "$TEMP_DOWNLOAD_FILE"
-
+        log_warn "$INTERFACE: download test produced no data"
         return 1
     fi
 
@@ -482,25 +481,16 @@ run_download_test()
         }')
 
     if ! [[ "$speed" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-
         log_warn \
             "$INTERFACE: invalid calculated speed: $speed"
-
-        rm -f "$TEMP_DOWNLOAD_FILE"
-
         return 1
     fi
 
-    log_info \
-        "$INTERFACE: download speed ${speed} Mbps"
-
-    rm -f "$TEMP_DOWNLOAD_FILE"
+    log_info "$INTERFACE: download speed ${speed} Mbps"
 
     if awk "BEGIN {exit !($speed >= $HEALTH_MIN_SPEED_MBPS)}"; then
 
-        log_info \
-            "$INTERFACE: speed health check passed"
-
+        log_info "$INTERFACE: speed health check passed"
         return 0
 
     fi
@@ -521,10 +511,6 @@ run_health_test()
     log_info "$INTERFACE: starting health test"
     log_info "----------------------------------------------------"
 
-    # --------------------------------------------------------
-    # Ping
-    # --------------------------------------------------------
-
     if [ "$PING_ENABLED" = "yes" ]; then
 
         if ! run_ping_test; then
@@ -537,10 +523,6 @@ run_health_test()
         log_info "$INTERFACE: ping test skipped"
 
     fi
-
-    # --------------------------------------------------------
-    # Download speed
-    # --------------------------------------------------------
 
     if ! run_download_test; then
         log_warn "$INTERFACE: health test FAILED at download stage"
@@ -559,7 +541,7 @@ run_health_test()
 main()
 {
     log_info "===================================================="
-    log_info "Starting VPN health monitor for $INTERFACE"
+    log_info "Starting WireGuard health monitor for $INTERFACE"
     log_info "===================================================="
 
     for ((attempt=1; attempt<=HEALTH_RETRY_COUNT; attempt++))
@@ -598,18 +580,19 @@ main()
         "$INTERFACE: all $HEALTH_RETRY_COUNT health attempts failed"
 
     log_warn \
-        "$INTERFACE: starting VPN optimizer"
+        "$INTERFACE: starting WireGuard optimizer"
 
-    if "$OPTIMIZER" "$INTERFACE"; then
+    "$OPTIMIZER" "$INTERFACE"
+
+    optimizer_status=$?
+
+    if [ "$optimizer_status" -eq 0 ]; then
 
         log_info \
             "$INTERFACE: optimizer completed successfully"
 
         exit 0
-
     fi
-
-    optimizer_status=$?
 
     log_error \
         "$INTERFACE: optimizer failed with exit status $optimizer_status"

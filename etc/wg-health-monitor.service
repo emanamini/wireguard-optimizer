@@ -1,0 +1,13 @@
+[Unit]
+Description=WireGuard Optimizer hourly health monitor
+After=network-online.target
+Wants=network-online.target
+
+
+[Service]
+Type=oneshot
+
+ExecStart=/opt/router/wg-optimizer/wg-health-monitor.sh tun0
+ExecStart=/opt/router/wg-optimizer/wg-health-monitor.sh tun1
+
+TimeoutStartSec=infinity

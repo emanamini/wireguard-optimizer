@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # ============================================================
-# VPN Optimizer
-# Module: 02-prepare-candidates.sh
+# WireGuard Optimizer
+# Module: 03-prepare-candidates.sh
 # ============================================================
 #
 # PURPOSE
@@ -40,14 +40,14 @@
 #
 # USAGE
 #
-#   sudo /opt/router/vpn-optimizer/exec/02-prepare-candidates.sh tun0
+#   sudo /opt/router/wg-optimizer/exec/02-prepare-candidates.sh tun0
 #
-#   sudo /opt/router/vpn-optimizer/exec/02-prepare-candidates.sh tun1
+#   sudo /opt/router/wg-optimizer/exec/02-prepare-candidates.sh tun1
 #
 # INPUT
 #
-#   /dev/shm/vpn-optimizer/tun0/*.conf
-#   /dev/shm/vpn-optimizer/tun1/*.conf
+#   /dev/shm/wg-optimizer/tun0/*.conf
+#   /dev/shm/wg-optimizer/tun1/*.conf
 #
 #   Every candidate filename MUST be:
 #
@@ -55,12 +55,12 @@
 #
 # OUTPUT
 #
-#   /dev/shm/vpn-optimizer/tun0-tmp/*.conf
-#   /dev/shm/vpn-optimizer/tun1-tmp/*.conf
+#   /dev/shm/wg-optimizer/tun0-tmp/*.conf
+#   /dev/shm/wg-optimizer/tun1-tmp/*.conf
 #
 # CONFIGURATION
 #
-#   /etc/vpn-optimizer.conf
+#   /etc/wg-optimizer.conf
 #
 # ============================================================
 
@@ -96,7 +96,7 @@ log_success()
 # Configuration
 # ------------------------------------------------------------
 
-CONFIG_FILE="/etc/vpn-optimizer.conf"
+CONFIG_FILE="/etc/wg-optimizer.conf"
 
 
 # ------------------------------------------------------------

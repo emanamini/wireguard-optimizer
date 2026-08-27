@@ -2,16 +2,29 @@
 
 set -u
 
+CONFIG_FILE="/etc/wg-optimizer.conf"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "[ERROR] Configuration file does not exist: $CONFIG_FILE"
+    exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$CONFIG_FILE"
+
 SERVICES=(
+
     "tun1-watcher.service"
+
     "vpn-manager.service"
+
 )
 
-OPTIMIZER="/opt/router/vpn-optimizer/vpn-optimizer.sh"
+OPTIMIZER="$BASE_DIR/wg-optimizer.sh"
 
 restore_services()
 {
-    echo "[INFO] Restoring background services"
+    echo "[INFO] Restoring background WireGuard services"
 
     for service in "${SERVICES[@]}"; do
 
@@ -29,7 +42,7 @@ restore_services()
 trap restore_services EXIT
 
 
-echo "[INFO] Stopping background VPN services"
+echo "[INFO] Stopping background WireGuard services"
 
 for service in "${SERVICES[@]}"; do
 
@@ -46,17 +59,18 @@ done
 
 
 echo "[INFO] Waiting for services to settle"
+
 sleep 2
 
 
-echo "[INFO] Starting VPN Optimizer for both interfaces"
+echo "[INFO] Starting WireGuard Optimizer for both interfaces"
 
 if ! "$OPTIMIZER" both; then
-    echo "[ERROR] VPN optimization failed"
+    echo "[ERROR] WireGuard optimization failed"
     exit 1
 fi
 
 
-echo "[INFO] Daily VPN optimization completed successfully"
+echo "[INFO] Daily WireGuard optimization completed successfully"
 
 exit 0

@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 
 # ============================================================
-# VPN Optimizer
-# Module: 05-cleanup.sh
+# WireGuard Optimizer
+# Module: 06-cleanup.sh
 # ============================================================
 #
 # PURPOSE:
-#   Finalize the optimizer run for ONE VPN interface.
+#   Finalize the optimizer run for ONE WireGuard interface.
 #
 # USAGE:
 #
-#   sudo ./05-cleanup.sh tun0
-#   sudo ./05-cleanup.sh tun1
+#   sudo ./06-cleanup.sh tun0
+#   sudo ./06-cleanup.sh tun1
 #
 # IMPORTANT:
 #   This script is interface-specific.
 #
 #   If called with "tun0", it ONLY touches:
 #
-#       /dev/shm/vpn-optimizer/tun0/
-#       /opt/router/vpn-optimizer/state/tun0-speed-state.txt
-#       /opt/router/vpn-optimizer/state/tun0-endpoint-state.txt
+#       /dev/shm/wg-optimizer/tun0/
+#       /opt/router/wg-optimizer/state/tun0-speed-state.txt
+#       /opt/router/wg-optimizer/state/tun0-endpoint-state.txt
 #
 #   If called with "tun1", it ONLY touches the corresponding
 #   tun1 paths.
@@ -42,10 +42,10 @@ set -o pipefail
 # Configuration
 # ------------------------------------------------------------
 
-CONFIG_FILE="/etc/vpn-optimizer.conf"
+CONFIG_FILE="/etc/wg-optimizer.conf"
 
-TEMP_BASE_DIR="/dev/shm/vpn-optimizer"
-STATE_DIR="/opt/router/vpn-optimizer/state"
+TEMP_BASE_DIR="/dev/shm/wg-optimizer"
+STATE_DIR="/opt/router/wg-optimizer/state"
 
 VPN_RESTART_WAIT_SECONDS=5
 
@@ -137,23 +137,6 @@ cleanup_interface_workspace()
     return "$failed"
 }
 
-# ------------------------------------------------------------
-# Cleanup interface-specific state
-# ------------------------------------------------------------
-
-cleanup_interface_state()
-{
-    local interface="$1"
-    local failed=0
-
-    log_info "Cleaning state files for $interface..."
-
-    remove_path "$STATE_DIR/${interface}-speed-state.txt" || failed=1
-
-    remove_path "$STATE_DIR/${interface}-endpoint-state.txt" || failed=1
-
-    return "$failed"
-}
 
 # ------------------------------------------------------------
 # Check WireGuard interface
@@ -287,7 +270,7 @@ restart_vpn()
     local interface="$1"
     local service="wg-quick@${interface}.service"
 
-    log_warn "$interface: restarting VPN..."
+    log_warn "$interface: restarting WireGuard..."
 
     if systemctl restart "$service" 2>/dev/null; then
         log_success "$interface: systemd restart completed."
@@ -393,10 +376,6 @@ main()
     # --------------------------------------------------------
 
     if ! cleanup_interface_workspace "$interface"; then
-        failed=1
-    fi
-
-    if ! cleanup_interface_state "$interface"; then
         failed=1
     fi
 

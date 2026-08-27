@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # ============================================================
-# VPN Optimizer
-# Script 3: Candidate Testing
+# WireGuard Optimizer
+# Script 4: Candidate Testing
 # ============================================================
 #
 # PURPOSE
@@ -32,8 +32,8 @@
 #       - start a production VPN after testing
 #
 # USAGE
-#   sudo /opt/router/vpn-optimizer/exec/03-test-candidates.sh tun0
-#   sudo /opt/router/vpn-optimizer/exec/03-test-candidates.sh tun1
+#   sudo /opt/router/wg-optimizer/exec/04-test-candidates.sh tun0
+#   sudo /opt/router/wg-optimizer/exec/04-test-candidates.sh tun1
 #
 # ============================================================
 
@@ -43,12 +43,8 @@ set -u
 # 1. CONSTANTS AND GLOBAL VARIABLES
 # ============================================================
 
-CONFIG_FILE="/etc/vpn-optimizer.conf"
-
-BASE_DIR="/opt/router/vpn-optimizer"
-STATE_DIR="$BASE_DIR/state"
-LOG_DIR="$BASE_DIR/log"
-
+CONFIG_FILE="/etc/wg-optimizer.conf"
+LOG_DIR=""
 WG_DIR="/etc/wireguard"
 
 SOURCE_INTERFACE=""
@@ -69,6 +65,7 @@ FINAL_SIZE_MB=""
 FINAL_MIN_MBPS=""
 EARLY_MAX_SECONDS=""
 FINAL_MAX_SECONDS=""
+GOOD_ENOUGH_CANDIDATE_SPEED=""
 
 ALLOW_CONCURRENT_CONNECTIONS=""
 VPN_PRODUCTION_COOLDOWN_SECONDS=""
@@ -90,7 +87,7 @@ DEPLOY_REJECT_COUNT=0
 # 2. LOGGING
 # ============================================================
 
-LOG_FILE="$LOG_DIR/vpn-optimizer.log"
+LOG_FILE="$LOG_DIR/wg-optimizer.log"
 
 log()
 {
@@ -153,8 +150,6 @@ select_interface_settings()
             PING_COUNT="${TUN0_PING_COUNT:-}"
             MAX_PACKET_LOSS="${TUN0_MAX_PACKET_LOSS:-}"
             MAX_AVERAGE_LATENCY="${TUN0_MAX_AVERAGE_LATENCY:-}"
-
-            CANDIDATE_DIR="/dev/shm/vpn-optimizer/tun0-tmp"
             PRODUCTION_CONFIG="$WG_DIR/tun0.conf"
             ;;
 
@@ -163,8 +158,6 @@ select_interface_settings()
             PING_COUNT="${TUN1_PING_COUNT:-}"
             MAX_PACKET_LOSS="${TUN1_MAX_PACKET_LOSS:-}"
             MAX_AVERAGE_LATENCY="${TUN1_MAX_AVERAGE_LATENCY:-}"
-
-            CANDIDATE_DIR="/dev/shm/vpn-optimizer/tun1-tmp"
             PRODUCTION_CONFIG="$WG_DIR/tun1.conf"
             ;;
 
@@ -174,6 +167,8 @@ select_interface_settings()
             exit 1
             ;;
     esac
+    CANDIDATE_DIR="$TEMP_BASE_DIR/${SOURCE_INTERFACE}-tmp"
+
     PING_TEST_DESTINATION="${PING_TEST_DESTINATION:-}"
     PING_TIMEOUT_SECONDS="${PING_TIMEOUT_SECONDS:-}"
     DOWNLOAD_URL="${DOWNLOAD_TEST_URL:-}"
@@ -182,8 +177,10 @@ select_interface_settings()
     EARLY_MAX_SECONDS="${DOWNLOAD_EARLY_MAX_SECONDS:-10}"
     FINAL_SIZE_MB="${DOWNLOAD_FINAL_SIZE_MB:-20}"
     FINAL_MIN_MBPS="${DOWNLOAD_FINAL_MIN_MBPS:-30}"
-    FINAL_MAX_SECONDS="${DOWNLOAD_FINAL_MAX_SECONDS:-10}"
 
+    FINAL_MAX_SECONDS="${DOWNLOAD_FINAL_MAX_SECONDS:-10}"
+    
+    GOOD_ENOUGH_CANDIDATE_SPEED="${GOOD_ENOUGH_CANDIDATE_SPEED:-}"
     ALLOW_CONCURRENT_CONNECTIONS="${ALLOW_CONCURRENT_CONNECTIONS:-no}"
     VPN_PRODUCTION_COOLDOWN_SECONDS="${VPN_PRODUCTION_COOLDOWN_SECONDS:-5}"
     VPN_TEST_COOLDOWN_SECONDS="${VPN_TEST_COOLDOWN_SECONDS:-2}"
@@ -225,6 +222,28 @@ validate_configuration()
 
     if ! [[ "$FINAL_MAX_SECONDS" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
         error "Invalid final download timeout: $FINAL_MAX_SECONDS"
+        exit 1
+    fi
+
+    if ! [[ "$FINAL_MIN_MBPS" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        error "Invalid final minimum download speed: $FINAL_MIN_MBPS"
+        exit 1
+    fi
+
+    if ! [[ "$GOOD_ENOUGH_CANDIDATE_SPEED" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        error "Invalid good-enough candidate speed: $GOOD_ENOUGH_CANDIDATE_SPEED"
+        exit 1
+    fi
+
+    if awk "BEGIN {exit !($GOOD_ENOUGH_CANDIDATE_SPEED <= $FINAL_MIN_MBPS)}"; then
+        error "GOOD_ENOUGH_CANDIDATE_SPEED must be greater than DOWNLOAD_FINAL_MIN_MBPS"
+        error "DOWNLOAD_FINAL_MIN_MBPS: ${FINAL_MIN_MBPS} Mbps"
+        error "GOOD_ENOUGH_CANDIDATE_SPEED: ${GOOD_ENOUGH_CANDIDATE_SPEED} Mbps"
+        exit 1
+    fi
+    
+    if ! [[ "$GOOD_ENOUGH_CANDIDATE_SPEED" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        error "Invalid good-enough candidate speed: $GOOD_ENOUGH_CANDIDATE_SPEED"
         exit 1
     fi
 
@@ -518,7 +537,7 @@ download_test()
 {
     info "Starting download test for $CURRENT_CANDIDATE"
 
-    TEMP_DOWNLOAD_FILE="/dev/shm/vpn-optimizer/${TEMP_INTERFACE}-download.tmp"
+    TEMP_DOWNLOAD_FILE="/dev/shm/wg-optimizer/${TEMP_INTERFACE}-download.tmp"
 
     early_bytes=$(download_bytes_for_mb "$EARLY_SIZE_MB")
     final_bytes=$(download_bytes_for_mb "$FINAL_SIZE_MB")
@@ -727,7 +746,7 @@ prepare_result_state()
 {
     mkdir -p "$STATE_DIR"
 
-    RUN_RESULTS_FILE="/dev/shm/vpn-optimizer/${SOURCE_INTERFACE}-speed-state.tmp"
+    RUN_RESULTS_FILE="/dev/shm/wg-optimizer/${SOURCE_INTERFACE}-speed-state.tmp"
 
     rm -f "$RUN_RESULTS_FILE"
 
@@ -799,7 +818,14 @@ test_all_candidates()
 
         record_result "$CURRENT_CANDIDATE" "$CURRENT_SPEED"
 
-        cleanup_candidate
+        if awk "BEGIN {exit !($CURRENT_SPEED >= $GOOD_ENOUGH_CANDIDATE_SPEED)}"; then
+            info "Good-enough speed reached: ${CURRENT_SPEED} Mbps >= ${GOOD_ENOUGH_CANDIDATE_SPEED} Mbps"
+            info "Stopping candidate testing early."
+            cleanup_candidate
+            break
+        fi
+
+cleanup_candidate
     done
 
     if [ "$candidate_count" -eq 0 ]; then
@@ -833,7 +859,7 @@ finish_production_state()
     info "Concurrent connections not allowed"
     info "Leaving $SOURCE_INTERFACE DOWN for Script 4"
 
-    info "Script 4 is responsible for the final production decision"
+    info "Script 5 is responsible for the final production decision"
 }
 
 # ============================================================
@@ -850,6 +876,10 @@ main()
     SOURCE_INTERFACE="$1"
 
     load_config
+
+    # Create required directories automatically on first run.
+    mkdir -p "$LOG_DIR"
+
     select_interface_settings
     validate_configuration
 
@@ -874,7 +904,7 @@ main()
     commit_result_state
 
     info "===================================================="
-    info "Script 3 finished for $SOURCE_INTERFACE"
+    info "Script 4 finished for $SOURCE_INTERFACE"
     info "===================================================="
 }
 

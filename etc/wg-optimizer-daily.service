@@ -1,9 +1,9 @@
 [Unit]
-Description=Daily VPN Optimizer
+Description=Daily WireGuard Optimizer
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/router/vpn-optimizer/vpn-optimizer-daily.sh
+ExecStart=/opt/router/wg-optimizer/wg-optimizer-daily.sh
 TimeoutStartSec=0

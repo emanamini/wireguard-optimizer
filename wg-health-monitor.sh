@@ -55,6 +55,8 @@ OPTIMIZER="$BASE_DIR/wg-optimizer.sh"
 LOG_FILE="$LOG_DIR/wg-health-monitor.log"
 DOWNLOAD_TEST_DIR="$TEMP_BASE_DIR"
 
+STATE_DIR="$BASE_DIR/state"
+
 # ============================================================
 # LOGGING
 # ============================================================
@@ -116,6 +118,28 @@ case "$INTERFACE" in
         ;;
 
 esac
+
+# ============================================================
+# STATE
+# ============================================================
+
+STATE_FILE="$STATE_DIR/${INTERFACE}-health.state"
+
+write_state()
+{
+    local state="$1"
+    local message="$2"
+
+    mkdir -p "$STATE_DIR"
+
+    cat > "$STATE_FILE" <<EOF
+STATE=$state
+MESSAGE="$message"
+UPDATED_EPOCH=$(date +%s)
+EOF
+
+    chmod 644 "$STATE_FILE"
+}
 
 # ============================================================
 # REQUIRED PATH VALIDATION
@@ -543,7 +567,10 @@ main()
     log_info "===================================================="
     log_info "Starting WireGuard health monitor for $INTERFACE"
     log_info "===================================================="
-
+write_state \
+    "testing" \
+    "VPN health check running."
+    
     for ((attempt=1; attempt<=HEALTH_RETRY_COUNT; attempt++))
     do
 
@@ -552,11 +579,16 @@ main()
 
         if run_health_test; then
 
-            log_info \
-                "$INTERFACE: HEALTHY - optimizer not required"
+    log_info \
+        "$INTERFACE: HEALTHY - optimizer not required"
 
-            exit 0
-        fi
+    write_state \
+        "healthy" \
+        "VPN health check successful."
+
+    exit 0
+fi
+
 
         log_warn \
             "$INTERFACE: health attempt $attempt/$HEALTH_RETRY_COUNT FAILED"
@@ -581,23 +613,34 @@ main()
 
     log_warn \
         "$INTERFACE: starting WireGuard optimizer"
-
+write_state \
+    "optimizer_running" \
+    "VPN unhealthy - optimizer running."
+    
     "$OPTIMIZER" "$INTERFACE"
 
     optimizer_status=$?
 
     if [ "$optimizer_status" -eq 0 ]; then
 
-        log_info \
-            "$INTERFACE: optimizer completed successfully"
+    log_info \
+        "$INTERFACE: optimizer completed successfully"
 
-        exit 0
-    fi
+    write_state \
+        "optimizer_success" \
+        "VPN optimized successfully."
+
+    exit 0
+fi
 
     log_error \
-        "$INTERFACE: optimizer failed with exit status $optimizer_status"
+    "$INTERFACE: optimizer failed with exit status $optimizer_status"
 
-    exit "$optimizer_status"
+write_state \
+    "optimizer_failed" \
+    "VPN optimizer failed."
+
+exit "$optimizer_status"
 }
 
 main

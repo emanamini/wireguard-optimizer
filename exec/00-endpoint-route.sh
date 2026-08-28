@@ -400,13 +400,25 @@ resolve_hostname()
     log_info "Resolving hostname: $hostname" >&2
     report "DNS lookup: $hostname"
 
-    result="$(
-        dig \
-            +short \
-            +time="$DNS_TIMEOUT" \
-            +tries="$DNS_TRIES" \
-            A "$hostname" 2>/dev/null
-    )"
+    # --- RESILIENT CASCADING DNS RESOLUTION ---
+    local wan_ip
+    wan_ip=$(ip -4 -o addr show dev wan 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
+
+    # 1. Direct Public DNS (Returns ALL IPv4 addresses, filters out CNAMEs)
+    result=$(dig +short +time=2 +tries=1 @1.1.1.1 A "$hostname" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+
+    # 2. Source IP Binding (via irtr table)
+    if [[ -z "$result" ]] && [[ -n "$wan_ip" ]]; then
+        report "DNS fallback 1: Binding to WAN IP ($wan_ip)"
+        result=$(dig -b "$wan_ip" +short +time=2 +tries=1 @8.8.8.8 A "$hostname" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+    fi
+
+    # 3. DNS-over-HTTPS (Parses JSON and returns ALL IPv4 addresses)
+    if [[ -z "$result" ]]; then
+        report "DNS fallback 2: DoH via curl on wan interface"
+        result=$(curl -s --max-time 3 --interface wan -H "accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=$hostname&type=A" 2>/dev/null | grep -o '"data":"[^"]*"' | cut -d'"' -f4 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+    fi
+    # ------------------------------------------
 
     if [[ -z "$result" ]]; then
         report "DNS resolution returned no A records for: $hostname"

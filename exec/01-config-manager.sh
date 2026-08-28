@@ -614,15 +614,30 @@ for PROCESS_INTERFACE in tun0 tun1; do
         log_info "Resolving domain with dig: $ENDPOINT_HOST"
 
 
-        DIG_OUTPUT=$(dig +short +time=3 +tries=1 A "$ENDPOINT_HOST")
+# --- RESILIENT CASCADING DNS RESOLUTION ---
+        WAN_IP=$(ip -4 -o addr show dev wan 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
 
+        # 1. Direct Public DNS (Returns ALL IPv4 addresses)
+        DIG_OUTPUT=$(dig +short +time=2 +tries=1 @1.1.1.1 A "$ENDPOINT_HOST" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
 
-        if [ $? -ne 0 ]; then
-            log_error "dig failed for: $ENDPOINT_HOST"
+        # 2. Source IP Binding (via irtr table)
+        if [ -z "$DIG_OUTPUT" ] && [ -n "$WAN_IP" ]; then
+            log_info "DNS fallback 1: Binding to WAN IP ($WAN_IP)"
+            DIG_OUTPUT=$(dig -b "$WAN_IP" +short +time=2 +tries=1 @8.8.8.8 A "$ENDPOINT_HOST" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+        fi
+
+        # 3. DNS-over-HTTPS (Returns ALL IPv4 addresses)
+        if [ -z "$DIG_OUTPUT" ]; then
+            log_info "DNS fallback 2: DoH via curl on wan interface"
+            DIG_OUTPUT=$(curl -s --max-time 3 --interface wan -H "accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=$ENDPOINT_HOST&type=A" 2>/dev/null | grep -o '"data":"[^"]*"' | cut -d'"' -f4 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+        fi
+
+        if [ -z "$DIG_OUTPUT" ]; then
+            log_error "DNS resolution failed for: $ENDPOINT_HOST"
             log_error "Skipping $CONFIG_NAME."
             continue
         fi
-
+        # ------------------------------------------
 
         FOUND_IPV4=false
 

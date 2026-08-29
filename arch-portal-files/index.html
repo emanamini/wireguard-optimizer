@@ -78,7 +78,7 @@
         .device-name-container { display: flex; flex-direction: column; gap: 4px; }
         .device-name { font-size: 1.25rem; font-weight: 600; }
         .device-ip { font-size: 1.25rem; color: var(--text-muted); font-family: monospace; }
-        
+
         .mac-badge {
             display: inline-block;
             font-size: 0.75rem;
@@ -140,7 +140,7 @@
         .vpn-off .status-dot { background-color: var(--toggle-off); }
 
         .status-badge.processing .status-dot {
-            background-color: #ff9f0a; 
+            background-color: #ff9f0a;
             box-shadow: 0 0 8px #ff9f0a;
             animation: pulse 1s infinite alternate;
         }
@@ -155,7 +155,7 @@
     box-shadow: 0 0 8px var(--accent-running);
     animation: pulse 1s infinite alternate;
 }
-      
+
         @keyframes pulse {
             from { opacity: 0.5; transform: scale(0.8); }
             to { opacity: 1; transform: scale(1.2); }
@@ -243,74 +243,73 @@
     <details>
         <summary>Advanced Settings</summary>
         <div class="advanced-content">
-            <div class="section-title" style="margin-top: 1rem; margin-bottom: 0;">Target IP</div>
-            <div class="input-group">
-                <input type="number" id="target-ip" placeholder="e.g. 15" min="1" max="254">
-                <button onclick="checkTargetIP()">Check</button>
-            </div>
-            
-            <div id="advanced-result" style="display: none; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-                <div class="device-info" style="border:none; margin-bottom: 0.5rem; padding-bottom: 0;">
-                    <div class="device-name-container">
-                        <div id="adv-device-name" class="device-name">Target Device</div>
-                        <div id="adv-mac-badge" class="mac-badge" onclick="copyMac(this, this.dataset.mac)" title="Click to copy MAC Address">
-                            --:--:--:--:--:--
-                        </div>
-                    </div>
-                    <div id="adv-device-ip" class="device-ip">.---</div>
-                </div>
-                <div class="control-group">
-                    <div id="adv-status-container" class="status-badge">
-                        <span class="status-dot"></span>
-                        <span id="adv-status-text" class="status-text">STATUS</span>
-                    </div>
-                    <label class="switch" id="adv-switch-label">
-                        <input type="checkbox" id="adv-vpn-toggle">
-                        <span class="slider"></span>
-                    </label>
-                </div>
 
-                <!-- Trusted user registering a target MAC -->
-                <button class="btn-secondary btn-secondary-adv" onclick="openMacModal(document.getElementById('adv-device-name').innerText, currentAdvOctet)">
-                    Register Target MAC
-                </button>
-            </div>
-                <!--  VPN OPTIMIZER SECTION  -->
-            <div style="margin-top: 2rem; padding: 1.25rem 1rem; background-color: rgba(255, 255, 255, 0.03); border-radius: 10px; border: 1px solid var(--border-color);">
-                
+            <div style="margin-top: 1rem; padding: 1.25rem 1rem; background-color: rgba(255, 255, 255, 0.03); border-radius: 10px; border: 1px solid var(--border-color);">
                 <div class="section-title" style="margin-top: 0; margin-bottom: 1rem; justify-content: center;">
                     VPN Health Optimizer
                 </div>
-                
-                <button id="btn-optimize-vpn" 
-                        style="width: 100%; padding: 12px; border-radius: 8px; background-color: var(--toggle-off); color: var(--text-main); border: 1px solid transparent; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem; cursor: pointer; transition: 0.2s;" 
-                        onclick="triggerOptimizer()" 
-                        onmouseover="this.style.borderColor='var(--text-muted)'" 
+
+                <button id="btn-optimize-vpn"
+                        style="width: 100%; padding: 12px; border-radius: 8px; background-color: var(--toggle-off); color: var(--text-main); border: 1px solid transparent; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem; cursor: pointer; transition: 0.2s;"
+                        onclick="triggerOptimizer()"
+                        onmouseover="this.style.borderColor='var(--text-muted)'"
                         onmouseout="this.style.borderColor='transparent'">
                     Request Health Check
                 </button>
-                
-<div id="optimizer-status-container" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 10px;">
-    <div id="optimizer-msg" style="text-align: center; font-size: 0.85rem; color: var(--text-muted); min-height: 1.2rem; transition: color 0.3s;">
-        Ready to check VPN health.
-    </div>
-    
-    <!-- This box will hold the dynamic interface lines -->
-    <div id="interface-list" style="display: none; flex-direction: column; gap: 8px; font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-    </div>
-</div>
-                
+
+                <div id="optimizer-status-container" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 10px;">
+                    <div id="optimizer-msg" style="text-align: center; font-size: 0.85rem; color: var(--text-muted); min-height: 1.2rem; transition: color 0.3s;">
+                        Ready to check VPN health.
+                    </div>
+
+                    <div id="interface-list" style="display: none; flex-direction: column; gap: 8px; font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    </div>
+                </div>
             </div>
+
+            <div style="margin-top: 1.5rem; padding: 1.25rem 1rem; background-color: rgba(255, 255, 255, 0.03); border-radius: 10px; border: 1px solid var(--border-color);">
+                <div class="section-title" style="margin-top: 0; margin-bottom: 1rem;">Target IP</div>
+
+                <div class="input-group" style="margin-top: 0;">
+                    <input type="number" id="target-ip" placeholder="e.g. 15" min="1" max="254">
+                    <button onclick="checkTargetIP()">Check</button>
+                </div>
+
+                <div id="advanced-result" style="display: none; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <div class="device-info" style="border:none; margin-bottom: 0.5rem; padding-bottom: 0;">
+                        <div class="device-name-container">
+                            <div id="adv-device-name" class="device-name">Target Device</div>
+                            <div id="adv-mac-badge" class="mac-badge" onclick="copyMac(this, this.dataset.mac)" title="Click to copy MAC Address">
+                                --:--:--:--:--:--
+                            </div>
+                        </div>
+                        <div id="adv-device-ip" class="device-ip">.---</div>
+                    </div>
+                    <div class="control-group">
+                        <div id="adv-status-container" class="status-badge">
+                            <span class="status-dot"></span>
+                            <span id="adv-status-text" class="status-text">STATUS</span>
+                        </div>
+                        <label class="switch" id="adv-switch-label">
+                            <input type="checkbox" id="adv-vpn-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <button class="btn-secondary btn-secondary-adv" onclick="openMacModal(document.getElementById('adv-device-name').innerText, currentAdvOctet)">
+                        Register Target MAC
+                    </button>
+                </div>
+            </div>
+
         </div>
     </details>
     {% endif %}
 
-    <!-- Self Registration available to everyone (safe because they can only log themselves) -->
     <button class="btn-secondary" onclick="openMacModal('{{ device_name if device_name != 'Unknown Device' else '' }}', null)">
         Register This Device
     </button>
 
-    <!-- Shared MAC Modal Dialog -->
     <div id="macModal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-title" id="macModalTitle">Register Device</div>
@@ -335,8 +334,8 @@
             };
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(macString).then(showSuccess).catch(() => fallbackCopy(macString, showSuccess));
-            } else { 
-                fallbackCopy(macString, showSuccess); 
+            } else {
+                fallbackCopy(macString, showSuccess);
             }
         }
 
@@ -357,12 +356,12 @@
 
         function setBusyUI(container, textElement) {
             container.className = 'status-badge processing';
-            textElement.innerText = 'Updating...'; 
+            textElement.innerText = 'Updating...';
         }
 
         function setErrorUI(container, textElement) {
             container.className = 'status-badge error';
-            textElement.innerText = 'Error'; 
+            textElement.innerText = 'Error';
         }
 
         function updateToggleAvailability(toggleInput, switchLabel, isAllowed, isBusy) {
@@ -405,26 +404,26 @@
             const switchLabel = document.getElementById('main-switch-label');
             const statusContainer = document.getElementById('status-container');
             const statusText = document.getElementById('status-text');
-            
+
             const isAllowed = {{ 'true' if is_trusted else 'false' }};
             let isBusy = false;
-            
+
             updateToggleAvailability(toggle, switchLabel, isAllowed, isBusy);
 
             toggle.addEventListener('change', async function(e) {
                 e.preventDefault();
                 const desiredState = this.checked;
-                
+
                 isBusy = true;
                 updateToggleAvailability(toggle, switchLabel, isAllowed, isBusy);
                 setBusyUI(statusContainer, statusText);
-                
+
                 try {
                     const finalState = await apiToggleVPN("{{ ip_octet }}", desiredState);
                     this.checked = finalState;
                     updateStatusUI(statusContainer, statusText, finalState);
                 } catch (error) {
-                    this.checked = !desiredState; 
+                    this.checked = !desiredState;
                     setErrorUI(statusContainer, statusText);
                     alert(`Failed to update routing: \n${error.message}`);
                     setTimeout(() => updateStatusUI(statusContainer, statusText, this.checked), 2000);
@@ -435,7 +434,7 @@
             });
 
             setInterval(async () => {
-                if (isBusy) return; 
+                if (isBusy) return;
                 try {
                     const trueState = await apiPollStatus("{{ ip_octet }}");
                     if (toggle.checked !== trueState) {
@@ -457,37 +456,37 @@
             try {
                 const data = await apiFetchDeviceInfo(octet);
                 currentAdvOctet = octet;
-                
+
                 advAllowed = (octet >= 100 && octet <= 254);
                 advBusy = false;
 
                 document.getElementById('advanced-result').style.display = 'block';
                 document.getElementById('adv-device-ip').innerText = `.${octet}`;
                 document.getElementById('adv-device-name').innerText = data.device_name || 'Unknown';
-                
+
                 const macBadge = document.getElementById('adv-mac-badge');
                 macBadge.innerText = data.mac_address || 'UNKNOWN MAC';
                 macBadge.dataset.mac = data.mac_address || '';
-                
+
                 const advToggle = document.getElementById('adv-vpn-toggle');
                 const advContainer = document.getElementById('adv-status-container');
                 const advText = document.getElementById('adv-status-text');
                 const advLabel = document.getElementById('adv-switch-label');
-                
+
                 advToggle.checked = data.vpn_enabled;
                 updateStatusUI(advContainer, advText, data.vpn_enabled);
-                
+
                 advLabel.title = advAllowed ? "" : "IP must be 100-254 to bypass VPN";
                 updateToggleAvailability(advToggle, advLabel, advAllowed, advBusy);
 
-            } catch (error) { 
-                alert("Could not fetch data."); 
+            } catch (error) {
+                alert("Could not fetch data.");
             }
         }
 
         function initAdvancedToggle() {
             const advToggle = document.getElementById('adv-vpn-toggle');
-            if (!advToggle) return; 
+            if (!advToggle) return;
 
             const advContainer = document.getElementById('adv-status-container');
             const advText = document.getElementById('adv-status-text');
@@ -496,19 +495,19 @@
             advToggle.addEventListener('change', async function(e) {
                 e.preventDefault();
                 if (!currentAdvOctet) return;
-                
+
                 const desiredState = this.checked;
-                
+
                 advBusy = true;
                 updateToggleAvailability(advToggle, advLabel, advAllowed, advBusy);
                 setBusyUI(advContainer, advText);
-                
+
                 try {
                     const finalState = await apiToggleVPN(currentAdvOctet, desiredState);
                     this.checked = finalState;
                     updateStatusUI(advContainer, advText, finalState);
                 } catch (error) {
-                    this.checked = !desiredState; 
+                    this.checked = !desiredState;
                     setErrorUI(advContainer, advText);
                     alert(`Failed to update routing: \n${error.message}`);
                     setTimeout(() => updateStatusUI(advContainer, advText, this.checked), 2000);
@@ -524,21 +523,21 @@
 
         function openMacModal(defaultName, targetOctet = null) {
             activeMacTargetOctet = targetOctet;
-            
+
             const title = document.getElementById('macModalTitle');
             if (targetOctet) {
                 title.innerText = "Register Target Device (." + targetOctet + ")";
             } else {
                 title.innerText = "Register This Device";
             }
-            
+
             const nameInput = document.getElementById('macDeviceName');
             nameInput.value = (defaultName && defaultName !== 'Unknown' && defaultName !== 'Unknown Device') ? defaultName : '';
-            
+
             document.getElementById('macModal').style.display = 'flex';
             nameInput.focus();
         }
-        
+
         function closeMacModal() {
             document.getElementById('macModal').style.display = 'none';
             activeMacTargetOctet = null;
@@ -547,7 +546,7 @@
         function submitMac() {
             const nameInput = document.getElementById('macDeviceName').value;
             const payload = { name: nameInput };
-            
+
             // If checking an advanced IP, inject target_octet into payload
             if (activeMacTargetOctet) {
                 payload.target_octet = activeMacTargetOctet;
@@ -578,31 +577,39 @@
         let statusPollingInterval = null;
         let pendingStatusTimeout = null;
 
+        // Add a tracker to confirm if polling indicates backend is working
+        let isOptimizerActivelyRunning = false;
+
         async function fetchAndRenderStatus() {
             try {
-                const res = await fetch('/api/optimizer-status');
+                // Add a cache-buster query parameter to force mobile browsers to pull fresh JSON every time
+                const res = await fetch('/api/optimizer-status?_t=' + Date.now());
                 const data = await res.json();
-                
+
                 const listDiv = document.getElementById('interface-list');
                 listDiv.style.display = 'flex';
-                
+
                 let html = '';
+                let stillRunning = false;
+
                 for (const [iface, info] of Object.entries(data.interfaces)) {
                     let color = "var(--text-muted)";
-                    
-                    if (info.state === 'testing' || info.state === 'optimizer_running') {
-                        color = "var(--accent-running)"; // Cyan
+
+                    // Added 'pending' to the stillRunning check so the loop bridges the gap between tun0 finishing and tun1 starting
+                    if (info.state === 'testing' || info.state === 'optimizer_running' || info.state === 'pending') {
+                        if (info.state === 'testing' || info.state === 'optimizer_running') {
+                            color = "var(--accent-running)"; // Cyan
+                        }
+                        stillRunning = true;
                     } else if (info.state === 'healthy' || info.state === 'optimizer_success') {
                         color = "var(--accent-on)"; // Green
                     } else if (info.state === 'failed' || info.state === 'optimizer_failed' || info.state === 'failure') {
                         color = "#ff453a"; // Red
-                    } else if (info.state === 'pending' || info.state === 'skipped') {
-                        color = "var(--text-muted)"; // Grey
                     }
-                    
+
                     // Rename tun0 to Tunnel 0
                     const displayName = iface.replace(/tun(\d+)/i, 'Tunnel $1');
-                    
+
                     html += `
                     <div style="display: flex; justify-content: space-between; align-items: center; color: ${color};">
                         <span style="font-family: monospace; font-weight: bold; font-size: 0.9rem;">${displayName}</span>
@@ -610,22 +617,27 @@
                     </div>`;
                 }
                 listDiv.innerHTML = html;
-            } catch (e) { console.error("Status fetch failed", e); }
+                isOptimizerActivelyRunning = stillRunning;
+                return data;
+            } catch (e) {
+                console.error("Status fetch failed", e);
+                return null;
+            }
         }
 
         async function triggerOptimizer() {
             const btn = document.getElementById('btn-optimize-vpn');
             const msg = document.getElementById('optimizer-msg');
             const listDiv = document.getElementById('interface-list');
-            
+
             btn.disabled = true;
             btn.style.opacity = '0.5';
             btn.style.borderColor = "var(--accent-running)";
             msg.innerText = "Running health checks...";
             msg.style.color = "var(--accent-running)";
-            
+
             // 1. Wipe UI immediately to clear old ghosts
-            listDiv.innerHTML = ''; 
+            listDiv.innerHTML = '';
             listDiv.style.display = 'none';
 
             // 2. Clear any lingering timers from previous clicks
@@ -634,8 +646,8 @@
 
             // 3. Start the API call
             const responsePromise = fetch('/api/optimize-vpn', { method: 'POST' });
-            
-            // 4. Set a timer to start polling UI. If the script finishes instantly (COOLDOWN), 
+
+            // 4. Set a timer to start polling UI. If the script finishes instantly (COOLDOWN),
             // we will cancel this timer before it ever fires!
             pendingStatusTimeout = setTimeout(() => {
                 fetchAndRenderStatus();
@@ -643,6 +655,8 @@
             }, 500);
 
             let actuallyRan = false;
+            let delayedMsg = null;
+            let delayedColor = null;
 
             try {
                 const response = await responsePromise;
@@ -651,42 +665,89 @@
                 if (!data.success && data.error) throw new Error(data.error);
 
                 if (data.status === "SUCCESS") {
-                    msg.innerText = data.message || "VPN health check completed successfully.";
-                    msg.style.color = "var(--accent-on)";
+                    delayedMsg = data.message || "VPN health check completed successfully.";
+                    delayedColor = "var(--accent-on)";
                     actuallyRan = true;
                 } else if (data.status === "FAILURE") {
                     msg.innerText = data.message || "VPN health monitor service failed.";
                     msg.style.color = "#ff453a";
                     actuallyRan = true;
                 } else if (data.status === "BUSY") {
-                    msg.innerText = "A check is already running. Please wait.";
-                    msg.style.color = "#ff9f0a";
-                    // Note: actuallyRan remains false
+                    // Browser silently retried because the check took >60 seconds.
+                    // Keep the UI visible and resume polling logic.
+                    msg.innerText = "Optimizer is running. Tracking progress...";
+                    msg.style.color = "var(--accent-running)";
+                    delayedMsg = "VPN health check completed.";
+                    delayedColor = "var(--accent-on)";
+                    actuallyRan = true;
                 } else if (data.status === "COOLDOWN") {
                     startOptimizerCooldown(data.remaining);
-                    return; 
+                    return;
                 } else {
                     msg.innerText = "Unexpected script response.";
                     msg.style.color = "#ff453a";
                 }
             } catch (err) {
-                msg.innerText = "Failed: " + err.message;
-                msg.style.color = "#ff453a";
+                // Safely handle 504 Gateway Timeouts or silent network drops without hiding the UI
+                if (isOptimizerActivelyRunning || err.name === 'TypeError' || err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network')) {
+                    delayedMsg = "VPN health check finished in background.";
+                    delayedColor = "var(--accent-on)";
+                    actuallyRan = true;
+                } else {
+                    msg.innerText = "Failed: " + err.message;
+                    msg.style.color = "#ff453a";
+                }
             } finally {
                 // 5. Cleanup timers unconditionally
                 clearTimeout(pendingStatusTimeout);
                 clearInterval(statusPollingInterval);
-                
+
                 // 6. Only fetch the final tunnel states if the test was actively executed
                 if (actuallyRan) {
-                    setTimeout(fetchAndRenderStatus, 500);
+                    const finalData = await fetchAndRenderStatus();
+                    let isStillRunning = false;
+
+                    if (finalData && finalData.interfaces) {
+                        for (const info of Object.values(finalData.interfaces)) {
+                            // Added 'pending' here as well so the finally block respects the queue
+                            if (info.state === 'testing' || info.state === 'optimizer_running' || info.state === 'pending') {
+                                isStillRunning = true;
+                            }
+                        }
+                    }
+
+                    if (isStillRunning) {
+                        msg.innerText = "Resuming background check...";
+                        msg.style.color = "var(--accent-running)";
+                        statusPollingInterval = setInterval(async () => {
+                            const pollData = await fetchAndRenderStatus();
+                            let stillRunning = false;
+                            if (pollData && pollData.interfaces) {
+                                for (const info of Object.values(pollData.interfaces)) {
+                                    if (info.state === 'testing' || info.state === 'optimizer_running' || info.state === 'pending') stillRunning = true;
+                                }
+                            }
+                            if (!stillRunning) {
+                                clearInterval(statusPollingInterval);
+                                msg.innerText = delayedMsg || "VPN health check finished in background.";
+                                msg.style.color = delayedColor || "var(--accent-on)";
+                            }
+                        }, 1000);
+                    } else {
+                        if (delayedMsg) {
+                            setTimeout(() => {
+                                msg.innerText = delayedMsg;
+                                msg.style.color = delayedColor;
+                            }, 1200);
+                        }
+                    }
                 } else {
-                    // Ensure the list stays hidden if we hit busy/cooldown
-                    listDiv.innerHTML = ''; 
+                    // Ensure the list stays hidden if we hit busy/cooldown immediately
+                    listDiv.innerHTML = '';
                     listDiv.style.display = 'none';
                 }
             }
-            
+
             setTimeout(() => {
                 if (optimizerCooldownTimer === null) {
                     btn.disabled = false;
@@ -701,14 +762,14 @@
         function startOptimizerCooldown(seconds) {
             const btn = document.getElementById('btn-optimize-vpn');
             const msg = document.getElementById('optimizer-msg');
-            
+
             clearInterval(optimizerCooldownTimer);
             let remaining = seconds;
-            
+
             btn.disabled = true;
             btn.style.opacity = '0.5';
             msg.style.color = "#ff9f0a";
-            
+
             const tick = () => {
                 if (remaining <= 0) {
                     clearInterval(optimizerCooldownTimer);
@@ -724,7 +785,7 @@
                     remaining--;
                 }
             };
-            
+
             tick(); // Run immediately so it doesn't delay 1 second
             optimizerCooldownTimer = setInterval(tick, 1000);
         }

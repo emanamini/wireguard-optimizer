@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arch Router Portal</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#121212">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Arch Router">
+    <link rel="apple-touch-icon" href="/static/icon.png">
+
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1c1c1e;
+            --text-main: #ffffff;
+            --text-muted: #8e8e93;
+            --accent-on: #34c759;
+          --accent-running: #32d6ff;
+            --toggle-off: #39393d;
+            --border-color: #2c2c2e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 2rem;
+            letter-spacing: 2px;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: var(--text-main);
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .device-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .device-name-container { display: flex; flex-direction: column; gap: 4px; }
+        .device-name { font-size: 1.25rem; font-weight: 600; }
+        .device-ip { font-size: 1.25rem; color: var(--text-muted); font-family: monospace; }
+        
+        .mac-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            width: fit-content;
+            user-select: none;
+        }
+        .mac-badge:hover {
+            color: white;
+            border-color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .control-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; transition: background-color 0.3s; }
+
+        .switch { position: relative; display: inline-block; width: 51px; height: 31px; }
+        .switch input { opacity: 0; width: 0; height: 0; position: absolute; z-index: -1; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--toggle-off); transition: 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            border-radius: 31px; border: 2px solid transparent;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 27px; width: 27px; left: 0px; bottom: 0px;
+            background-color: white; transition: 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input:checked + .slider { background-color: var(--accent-on); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+        .switch.processing { opacity: 0.5; cursor: wait; pointer-events: none; }
+
+        .vpn-on .status-text { color: var(--accent-on); }
+        .vpn-on .status-dot { background-color: var(--accent-on); box-shadow: 0 0 8px var(--accent-on); }
+        .vpn-off .status-text { color: var(--text-muted); }
+        .vpn-off .status-dot { background-color: var(--toggle-off); }
+
+        .status-badge.processing .status-dot {
+            background-color: #ff9f0a; 
+            box-shadow: 0 0 8px #ff9f0a;
+            animation: pulse 1s infinite alternate;
+        }
+        .status-badge.processing .status-text { color: #ff9f0a; }
+        .status-badge.error .status-text { color: #ff453a; font-size: 0.9rem; }
+.optimizer-running {
+    color: var(--accent-running);
+}
+
+.optimizer-running .status-dot {
+    background-color: var(--accent-running);
+    box-shadow: 0 0 8px var(--accent-running);
+    animation: pulse 1s infinite alternate;
+}
+      
+        @keyframes pulse {
+            from { opacity: 0.5; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1.2); }
+        }
+
+        details {
+            width: 100%; max-width: 400px; background-color: var(--card-bg);
+            border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;
+            margin-bottom: 1rem;
+        }
+        summary {
+            padding: 1rem; font-weight: 600; cursor: pointer; list-style: none;
+            display: flex; justify-content: space-between; align-items: center; color: var(--text-muted);
+        }
+        summary::-webkit-details-marker { display: none; }
+        summary::after { content: '▼'; font-size: 0.8rem; transition: transform 0.3s; }
+        details[open] summary::after { transform: rotate(180deg); }
+        .advanced-content { padding: 0 1rem 1rem 1rem; border-top: 1px solid var(--border-color); }
+
+        .input-group { display: flex; gap: 10px; margin-top: 1rem; }
+        input[type="number"], input[type="text"] {
+            flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);
+            background: var(--bg-color); color: white; font-size: 1rem; font-family: monospace;
+        }
+        button {
+            padding: 10px 20px; border-radius: 8px; border: none; background: var(--text-muted);
+            color: var(--bg-color); font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        button:hover { background: white; }
+
+        /* Style for MAC Registration Buttons */
+        .btn-secondary {
+            background: transparent; color: var(--text-muted); border: 1px solid var(--border-color);
+            width: 100%; max-width: 400px; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem;
+        }
+        .btn-secondary:hover { border-color: var(--text-main); color: var(--text-main); }
+        .btn-secondary-adv { width: 100%; margin-top: 1rem; }
+
+        /* Style for MAC Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 999;
+        }
+        .modal-card {
+            background: var(--card-bg); padding: 1.5rem; border-radius: 12px;
+            width: 90%; max-width: 320px; text-align: center; border: 1px solid var(--border-color);
+        }
+        .modal-title { margin-bottom: 1rem; font-weight: 600; color: var(--text-main); }
+        .modal-actions { display: flex; gap: 10px; margin-top: 1rem; }
+        .modal-actions button { flex: 1; }
+        .btn-confirm { background: var(--accent-on); color: #000; }
+    </style>
+</head>
+<body>
+
+    <h1>Arch Router</h1>
+
+    <div class="card">
+        <div class="section-title">This Device</div>
+        <div class="device-info">
+            <div class="device-name-container">
+                <div class="device-name">{{ device_name | default("Unknown Device") }}</div>
+                <div class="mac-badge" onclick="copyMac(this, '{{ mac_address }}')" title="Click to copy MAC Address">
+                    {{ mac_address }}
+                </div>
+            </div>
+            <div class="device-ip">.{{ ip_octet }}</div>
+        </div>
+
+        <div class="control-group">
+            <div id="status-container" class="status-badge {% if vpn_enabled %}vpn-on{% else %}vpn-off{% endif %}">
+                <span class="status-dot"></span>
+                <span id="status-text" class="status-text">
+                    {% if vpn_enabled %}VPN ON{% else %}VPN OFF{% endif %}
+                </span>
+            </div>
+            <label class="switch" id="main-switch-label" title="{% if not is_trusted %}Identity verification failed. IP must be registered.{% endif %}">
+                <input type="checkbox" id="vpn-toggle" {% if vpn_enabled %}checked{% endif %}>
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    {% if is_trusted %}
+    <details>
+        <summary>Advanced Settings</summary>
+        <div class="advanced-content">
+            <div class="section-title" style="margin-top: 1rem; margin-bottom: 0;">Target IP</div>
+            <div class="input-group">
+                <input type="number" id="target-ip" placeholder="e.g. 15" min="1" max="254">
+                <button onclick="checkTargetIP()">Check</button>
+            </div>
+            
+            <div id="advanced-result" style="display: none; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div class="device-info" style="border:none; margin-bottom: 0.5rem; padding-bottom: 0;">
+                    <div class="device-name-container">
+                        <div id="adv-device-name" class="device-name">Target Device</div>
+                        <div id="adv-mac-badge" class="mac-badge" onclick="copyMac(this, this.dataset.mac)" title="Click to copy MAC Address">
+                            --:--:--:--:--:--
+                        </div>
+                    </div>
+                    <div id="adv-device-ip" class="device-ip">.---</div>
+                </div>
+                <div class="control-group">
+                    <div id="adv-status-container" class="status-badge">
+                        <span class="status-dot"></span>
+                        <span id="adv-status-text" class="status-text">STATUS</span>
+                    </div>
+                    <label class="switch" id="adv-switch-label">
+                        <input type="checkbox" id="adv-vpn-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- Trusted user registering a target MAC -->
+                <button class="btn-secondary btn-secondary-adv" onclick="openMacModal(document.getElementById('adv-device-name').innerText, currentAdvOctet)">
+                    Register Target MAC
+                </button>
+            </div>
+                <!--  VPN OPTIMIZER SECTION  -->
+            <div style="margin-top: 2rem; padding: 1.25rem 1rem; background-color: rgba(255, 255, 255, 0.03); border-radius: 10px; border: 1px solid var(--border-color);">
+                
+                <div class="section-title" style="margin-top: 0; margin-bottom: 1rem; justify-content: center;">
+                    VPN Health Optimizer
+                </div>
+                
+                <button id="btn-optimize-vpn" 
+                        style="width: 100%; padding: 12px; border-radius: 8px; background-color: var(--toggle-off); color: var(--text-main); border: 1px solid transparent; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem; cursor: pointer; transition: 0.2s;" 
+                        onclick="triggerOptimizer()" 
+                        onmouseover="this.style.borderColor='var(--text-muted)'" 
+                        onmouseout="this.style.borderColor='transparent'">
+                    Request Health Check
+                </button>
+                
+<div id="optimizer-status-container" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 10px;">
+    <div id="optimizer-msg" style="text-align: center; font-size: 0.85rem; color: var(--text-muted); min-height: 1.2rem; transition: color 0.3s;">
+        Ready to check VPN health.
+    </div>
+    
+    <!-- This box will hold the dynamic interface lines -->
+    <div id="interface-list" style="display: none; flex-direction: column; gap: 8px; font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+    </div>
+</div>
+                
+            </div>
+        </div>
+    </details>
+    {% endif %}
+
+    <!-- Self Registration available to everyone (safe because they can only log themselves) -->
+    <button class="btn-secondary" onclick="openMacModal('{{ device_name if device_name != 'Unknown Device' else '' }}', null)">
+        Register This Device
+    </button>
+
+    <!-- Shared MAC Modal Dialog -->
+    <div id="macModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-title" id="macModalTitle">Register Device</div>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Confirm or update device name:</p>
+            <input type="text" id="macDeviceName" placeholder="e.g. Eman's PC" style="width: 100%; font-family: sans-serif;">
+            <div class="modal-actions">
+                <button onclick="closeMacModal()">Cancel</button>
+                <button class="btn-confirm" onclick="submitMac()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function copyMac(element, macString) {
+            if (!macString || macString === "UNKNOWN MAC" || macString === "--:--:--:--:--:--") return;
+            const showSuccess = () => {
+                const originalText = element.innerText;
+                element.innerText = "COPIED!";
+                element.style.color = "var(--accent-on)";
+                element.style.borderColor = "var(--accent-on)";
+                setTimeout(() => { element.innerText = originalText; element.style.color = ""; element.style.borderColor = "transparent"; }, 1500);
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(macString).then(showSuccess).catch(() => fallbackCopy(macString, showSuccess));
+            } else { 
+                fallbackCopy(macString, showSuccess); 
+            }
+        }
+
+        function fallbackCopy(text, successCallback) {
+            try {
+                const textArea = document.createElement("textarea"); textArea.value = text;
+                textArea.style.top = "0"; textArea.style.left = "0"; textArea.style.position = "fixed"; textArea.style.opacity = "0";
+                document.body.appendChild(textArea); textArea.focus(); textArea.select();
+                if (document.execCommand('copy')) successCallback();
+                document.body.removeChild(textArea);
+            } catch (err) { console.error("Fallback copy failed", err); }
+        }
+
+        function updateStatusUI(container, textElement, isOn) {
+            container.className = `status-badge ${isOn ? 'vpn-on' : 'vpn-off'}`;
+            textElement.innerText = isOn ? 'VPN ON' : 'VPN OFF';
+        }
+
+        function setBusyUI(container, textElement) {
+            container.className = 'status-badge processing';
+            textElement.innerText = 'Updating...'; 
+        }
+
+        function setErrorUI(container, textElement) {
+            container.className = 'status-badge error';
+            textElement.innerText = 'Error'; 
+        }
+
+        function updateToggleAvailability(toggleInput, switchLabel, isAllowed, isBusy) {
+            toggleInput.disabled = !isAllowed || isBusy;
+            if (isBusy) {
+                switchLabel.classList.add('processing');
+            } else {
+                switchLabel.classList.remove('processing');
+            }
+        }
+
+        async function apiToggleVPN(octet, desiredState) {
+            const response = await fetch('/api/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ octet: octet, state: desiredState })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || "Server rejected request");
+            }
+            return data.vpn_enabled;
+        }
+
+        async function apiPollStatus(octet) {
+            const response = await fetch(`/api/poll?octet=${octet}`);
+            if (!response.ok) throw new Error("Network error during poll");
+            const data = await response.json();
+            return data.vpn_enabled;
+        }
+
+        async function apiFetchDeviceInfo(octet) {
+            const response = await fetch(`/api/status?octet=${octet}`);
+            if (!response.ok) throw new Error("Network error fetching device");
+            return await response.json();
+        }
+
+        function initMainToggle() {
+            const toggle = document.getElementById('vpn-toggle');
+            const switchLabel = document.getElementById('main-switch-label');
+            const statusContainer = document.getElementById('status-container');
+            const statusText = document.getElementById('status-text');
+            
+            const isAllowed = {{ 'true' if is_trusted else 'false' }};
+            let isBusy = false;
+            
+            updateToggleAvailability(toggle, switchLabel, isAllowed, isBusy);
+
+            toggle.addEventListener('change', async function(e) {
+                e.preventDefault();
+                const desiredState = this.checked;
+                
+                isBusy = true;
+                updateToggleAvailability(toggle, switchLabel, isAllowed, isBusy);
+                setBusyUI(statusContainer, statusText);
+                
+                try {
+                    const finalState = await apiToggleVPN("{{ ip_octet }}", desiredState);
+                    this.checked = finalState;
+                    updateStatusUI(statusContainer, statusText, finalState);
+                } catch (error) {
+                    this.checked = !desiredState; 
+                    setErrorUI(statusContainer, statusText);
+                    alert(`Failed to update routing: \n${error.message}`);
+                    setTimeout(() => updateStatusUI(statusContainer, statusText, this.checked), 2000);
+                } finally {
+                    isBusy = false;
+                    updateToggleAvailability(toggle, switchLabel, isAllowed, isBusy);
+                }
+            });
+
+            setInterval(async () => {
+                if (isBusy) return; 
+                try {
+                    const trueState = await apiPollStatus("{{ ip_octet }}");
+                    if (toggle.checked !== trueState) {
+                        toggle.checked = trueState;
+                        updateStatusUI(statusContainer, statusText, trueState);
+                    }
+                } catch (error) { }
+            }, 10000);
+        }
+
+        let advAllowed = false;
+        let advBusy = false;
+        let currentAdvOctet = null;
+
+        async function checkTargetIP() {
+            const octet = document.getElementById('target-ip').value;
+            if (!octet || octet < 1 || octet > 254) return alert("Enter valid IP octet (1-254)");
+
+            try {
+                const data = await apiFetchDeviceInfo(octet);
+                currentAdvOctet = octet;
+                
+                advAllowed = (octet >= 100 && octet <= 254);
+                advBusy = false;
+
+                document.getElementById('advanced-result').style.display = 'block';
+                document.getElementById('adv-device-ip').innerText = `.${octet}`;
+                document.getElementById('adv-device-name').innerText = data.device_name || 'Unknown';
+                
+                const macBadge = document.getElementById('adv-mac-badge');
+                macBadge.innerText = data.mac_address || 'UNKNOWN MAC';
+                macBadge.dataset.mac = data.mac_address || '';
+                
+                const advToggle = document.getElementById('adv-vpn-toggle');
+                const advContainer = document.getElementById('adv-status-container');
+                const advText = document.getElementById('adv-status-text');
+                const advLabel = document.getElementById('adv-switch-label');
+                
+                advToggle.checked = data.vpn_enabled;
+                updateStatusUI(advContainer, advText, data.vpn_enabled);
+                
+                advLabel.title = advAllowed ? "" : "IP must be 100-254 to bypass VPN";
+                updateToggleAvailability(advToggle, advLabel, advAllowed, advBusy);
+
+            } catch (error) { 
+                alert("Could not fetch data."); 
+            }
+        }
+
+        function initAdvancedToggle() {
+            const advToggle = document.getElementById('adv-vpn-toggle');
+            if (!advToggle) return; 
+
+            const advContainer = document.getElementById('adv-status-container');
+            const advText = document.getElementById('adv-status-text');
+            const advLabel = document.getElementById('adv-switch-label');
+
+            advToggle.addEventListener('change', async function(e) {
+                e.preventDefault();
+                if (!currentAdvOctet) return;
+                
+                const desiredState = this.checked;
+                
+                advBusy = true;
+                updateToggleAvailability(advToggle, advLabel, advAllowed, advBusy);
+                setBusyUI(advContainer, advText);
+                
+                try {
+                    const finalState = await apiToggleVPN(currentAdvOctet, desiredState);
+                    this.checked = finalState;
+                    updateStatusUI(advContainer, advText, finalState);
+                } catch (error) {
+                    this.checked = !desiredState; 
+                    setErrorUI(advContainer, advText);
+                    alert(`Failed to update routing: \n${error.message}`);
+                    setTimeout(() => updateStatusUI(advContainer, advText, this.checked), 2000);
+                } finally {
+                    advBusy = false;
+                    updateToggleAvailability(advToggle, advLabel, advAllowed, advBusy);
+                }
+            });
+        }
+
+        // --- DYNAMIC MAC REGISTRATION JS ---
+        let activeMacTargetOctet = null;
+
+        function openMacModal(defaultName, targetOctet = null) {
+            activeMacTargetOctet = targetOctet;
+            
+            const title = document.getElementById('macModalTitle');
+            if (targetOctet) {
+                title.innerText = "Register Target Device (." + targetOctet + ")";
+            } else {
+                title.innerText = "Register This Device";
+            }
+            
+            const nameInput = document.getElementById('macDeviceName');
+            nameInput.value = (defaultName && defaultName !== 'Unknown' && defaultName !== 'Unknown Device') ? defaultName : '';
+            
+            document.getElementById('macModal').style.display = 'flex';
+            nameInput.focus();
+        }
+        
+        function closeMacModal() {
+            document.getElementById('macModal').style.display = 'none';
+            activeMacTargetOctet = null;
+        }
+
+        function submitMac() {
+            const nameInput = document.getElementById('macDeviceName').value;
+            const payload = { name: nameInput };
+            
+            // If checking an advanced IP, inject target_octet into payload
+            if (activeMacTargetOctet) {
+                payload.target_octet = activeMacTargetOctet;
+            }
+
+            fetch('/api/submit-mac', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert("✅ Device MAC logged successfully!");
+                    closeMacModal();
+                } else {
+                    alert("❌ Failed: " + data.error);
+                }
+            })
+            .catch(err => alert("❌ Network error"));
+        }
+
+        initMainToggle();
+        initAdvancedToggle();
+
+// --- VPN OPTIMIZER JS ---
+        let optimizerCooldownTimer = null;
+        let statusPollingInterval = null;
+        let pendingStatusTimeout = null;
+
+        async function fetchAndRenderStatus() {
+            try {
+                const res = await fetch('/api/optimizer-status');
+                const data = await res.json();
+                
+                const listDiv = document.getElementById('interface-list');
+                listDiv.style.display = 'flex';
+                
+                let html = '';
+                for (const [iface, info] of Object.entries(data.interfaces)) {
+                    let color = "var(--text-muted)";
+                    
+                    if (info.state === 'testing' || info.state === 'optimizer_running') {
+                        color = "var(--accent-running)"; // Cyan
+                    } else if (info.state === 'healthy' || info.state === 'optimizer_success') {
+                        color = "var(--accent-on)"; // Green
+                    } else if (info.state === 'failed' || info.state === 'optimizer_failed' || info.state === 'failure') {
+                        color = "#ff453a"; // Red
+                    } else if (info.state === 'pending' || info.state === 'skipped') {
+                        color = "var(--text-muted)"; // Grey
+                    }
+                    
+                    // Rename tun0 to Tunnel 0
+                    const displayName = iface.replace(/tun(\d+)/i, 'Tunnel $1');
+                    
+                    html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; color: ${color};">
+                        <span style="font-family: monospace; font-weight: bold; font-size: 0.9rem;">${displayName}</span>
+                        <span style="font-size: 0.75rem; text-align: right; max-width: 65%;">${info.message}</span>
+                    </div>`;
+                }
+                listDiv.innerHTML = html;
+            } catch (e) { console.error("Status fetch failed", e); }
+        }
+
+        async function triggerOptimizer() {
+            const btn = document.getElementById('btn-optimize-vpn');
+            const msg = document.getElementById('optimizer-msg');
+            const listDiv = document.getElementById('interface-list');
+            
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.borderColor = "var(--accent-running)";
+            msg.innerText = "Running health checks...";
+            msg.style.color = "var(--accent-running)";
+            
+            // 1. Wipe UI immediately to clear old ghosts
+            listDiv.innerHTML = ''; 
+            listDiv.style.display = 'none';
+
+            // 2. Clear any lingering timers from previous clicks
+            clearTimeout(pendingStatusTimeout);
+            clearInterval(statusPollingInterval);
+
+            // 3. Start the API call
+            const responsePromise = fetch('/api/optimize-vpn', { method: 'POST' });
+            
+            // 4. Set a timer to start polling UI. If the script finishes instantly (COOLDOWN), 
+            // we will cancel this timer before it ever fires!
+            pendingStatusTimeout = setTimeout(() => {
+                fetchAndRenderStatus();
+                statusPollingInterval = setInterval(fetchAndRenderStatus, 1000);
+            }, 500);
+
+            let actuallyRan = false;
+
+            try {
+                const response = await responsePromise;
+                const data = await response.json();
+
+                if (!data.success && data.error) throw new Error(data.error);
+
+                if (data.status === "SUCCESS") {
+                    msg.innerText = data.message || "VPN health check completed successfully.";
+                    msg.style.color = "var(--accent-on)";
+                    actuallyRan = true;
+                } else if (data.status === "FAILURE") {
+                    msg.innerText = data.message || "VPN health monitor service failed.";
+                    msg.style.color = "#ff453a";
+                    actuallyRan = true;
+                } else if (data.status === "BUSY") {
+                    msg.innerText = "A check is already running. Please wait.";
+                    msg.style.color = "#ff9f0a";
+                    // Note: actuallyRan remains false
+                } else if (data.status === "COOLDOWN") {
+                    startOptimizerCooldown(data.remaining);
+                    return; 
+                } else {
+                    msg.innerText = "Unexpected script response.";
+                    msg.style.color = "#ff453a";
+                }
+            } catch (err) {
+                msg.innerText = "Failed: " + err.message;
+                msg.style.color = "#ff453a";
+            } finally {
+                // 5. Cleanup timers unconditionally
+                clearTimeout(pendingStatusTimeout);
+                clearInterval(statusPollingInterval);
+                
+                // 6. Only fetch the final tunnel states if the test was actively executed
+                if (actuallyRan) {
+                    setTimeout(fetchAndRenderStatus, 500);
+                } else {
+                    // Ensure the list stays hidden if we hit busy/cooldown
+                    listDiv.innerHTML = ''; 
+                    listDiv.style.display = 'none';
+                }
+            }
+            
+            setTimeout(() => {
+                if (optimizerCooldownTimer === null) {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.borderColor = 'transparent';
+                }
+            }, 3000);
+        }
+
+        // Keep your existing startOptimizerCooldown() function below this...
+
+        function startOptimizerCooldown(seconds) {
+            const btn = document.getElementById('btn-optimize-vpn');
+            const msg = document.getElementById('optimizer-msg');
+            
+            clearInterval(optimizerCooldownTimer);
+            let remaining = seconds;
+            
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            msg.style.color = "#ff9f0a";
+            
+            const tick = () => {
+                if (remaining <= 0) {
+                    clearInterval(optimizerCooldownTimer);
+                    optimizerCooldownTimer = null;
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    msg.innerText = "Ready to check VPN health.";
+                    msg.style.color = "var(--text-muted)";
+                } else {
+                    const m = Math.floor(remaining / 60);
+                    const s = remaining % 60;
+                    msg.innerText = `On cooldown. Try again in ${m}m ${s}s`;
+                    remaining--;
+                }
+            };
+            
+            tick(); // Run immediately so it doesn't delay 1 second
+            optimizerCooldownTimer = setInterval(tick, 1000);
+        }
+    </script>
+</body>
+</html>

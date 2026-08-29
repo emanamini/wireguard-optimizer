@@ -64,6 +64,36 @@ log_error()
     echo "[ERROR] $*" >&2
 }
 
+
+update_interface_message()
+{
+    local interface="$1"
+    local message="$2"
+    local state_file="$STATE_DIR/${interface}-health.state"
+    local temporary_state_file="${state_file}.tmp"
+
+    [[ -f "$state_file" ]] || return 0
+
+    if ! sed \
+        -e '/^MESSAGE=/d' \
+        -e '/^UPDATED_EPOCH=/d' \
+        "$state_file" > "$temporary_state_file" 2>/dev/null; then
+        rm -f "$temporary_state_file" 2>/dev/null || true
+        return 0
+    fi
+
+    if ! printf 'MESSAGE="%s"\nUPDATED_EPOCH=%s\n' \
+        "$message" \
+        "$(date +%s)" >> "$temporary_state_file" 2>/dev/null; then
+        rm -f "$temporary_state_file" 2>/dev/null || true
+        return 0
+    fi
+
+    mv -f "$temporary_state_file" "$state_file" 2>/dev/null || {
+        rm -f "$temporary_state_file" 2>/dev/null || true
+    }
+}
+
 # ============================================================
 # Usage
 # ============================================================
@@ -389,6 +419,12 @@ run_endpoint_route()
     echo "[00] Starting: $script"
     echo "Endpoint route scope: $ENDPOINT_ROUTE_SCOPE"
     echo "============================================================"
+  
+    for interface in "${INTERFACES[@]}"; do
+    update_interface_message "$interface" "Preparing endpoint routes."
+    done
+
+    sleep "$SLEEP_BETWEEN_SCRIPTS"
 
     case "$ENDPOINT_ROUTE_SCOPE" in
 
@@ -396,38 +432,51 @@ run_endpoint_route()
 
             # No argument means tun0 + tun1.
             if ! "$script_path"; then
+                for interface in "${INTERFACES[@]}"; do
+                    update_interface_message "$interface" "Endpoint preparation failed."
+                done
+
                 log_error "Module failed: $script"
                 log_error "WireGuard Optimizer stopped."
                 exit 1
             fi
             ;;
-
+            
         tun0)
 
             if ! "$script_path" tun0; then
+                update_interface_message "tun0" "Endpoint preparation failed."
+
                 log_error "Module failed: $script"
                 log_error "WireGuard Optimizer stopped."
                 exit 1
             fi
-            ;;
+            ;;   
 
         tun1)
 
             if ! "$script_path" tun1; then
+                update_interface_message "tun1" "Endpoint preparation failed."
+
                 log_error "Module failed: $script"
                 log_error "WireGuard Optimizer stopped."
                 exit 1
             fi
             ;;
-
+        
     esac
 
     echo
+
+    for interface in "${INTERFACES[@]}"; do
+        update_interface_message "$interface" "Endpoint routes prepared."
+    done
+
     log_success "Module completed: $script"
     log_info "Sleeping ${SLEEP_BETWEEN_SCRIPTS}s..."
 
     sleep "$SLEEP_BETWEEN_SCRIPTS"
-}
+    }
 
 # ============================================================
 # Run normal optimizer module
@@ -457,7 +506,51 @@ run_module()
     echo "Interface: $interface"
     echo "============================================================"
 
-    if ! "$script_path" "$interface"; then
+case "$number" in
+    01)
+        update_interface_message "$interface" "Loading configurations."
+        ;;
+    02)
+        update_interface_message "$interface" "Filtering conflicting candidates."
+        ;;
+    03)
+        update_interface_message "$interface" "Preparing VPN candidates."
+        ;;
+    04)
+        update_interface_message "$interface" "Testing VPN candidates."
+        ;;
+    05)
+        update_interface_message "$interface" "Deploying selected candidate."
+        ;;
+    06)
+        update_interface_message "$interface" "Cleaning up resources."
+        ;;
+esac
+
+sleep "$SLEEP_BETWEEN_SCRIPTS"
+
+if ! "$script_path" "$interface"; then
+
+        case "$number" in
+            01)
+                update_interface_message "$interface" "Configuration loading failed."
+                ;;
+            02)
+                update_interface_message "$interface" "Candidate filtering failed."
+                ;;
+            03)
+                update_interface_message "$interface" "Candidate preparation failed."
+                ;;
+            04)
+                update_interface_message "$interface" "Candidate testing failed."
+                ;;
+            05)
+                update_interface_message "$interface" "Candidate deployment failed."
+                ;;
+            06)
+                update_interface_message "$interface" "Cleanup failed."
+                ;;
+        esac
 
         echo
         echo "============================================================"
@@ -468,6 +561,27 @@ run_module()
 
         exit 1
     fi
+
+    case "$number" in
+        01)
+            update_interface_message "$interface" "Configurations loaded."
+            ;;
+        02)
+            update_interface_message "$interface" "Candidates filtered."
+            ;;
+        03)
+            update_interface_message "$interface" "Candidates prepared."
+            ;;
+        04)
+            update_interface_message "$interface" "Candidate testing completed."
+            ;;
+        05)
+            update_interface_message "$interface" "Candidate deployed successfully."
+            ;;
+        06)
+            update_interface_message "$interface" "Cleanup completed successfully."
+            ;;
+    esac
 
     echo
     log_success "Module completed: $script"

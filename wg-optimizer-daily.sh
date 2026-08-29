@@ -13,11 +13,8 @@ fi
 source "$CONFIG_FILE"
 
 SERVICES=(
-
     "tun1-watcher.service"
-
     "vpn-manager.service"
-
 )
 
 OPTIMIZER="$BASE_DIR/wg-optimizer.sh"
@@ -42,6 +39,15 @@ restore_services()
 trap restore_services EXIT
 
 
+MODE="${1:-both}"
+
+if [[ "$MODE" != "tun0" && "$MODE" != "tun1" && "$MODE" != "both" ]]; then
+    echo "[ERROR] Invalid mode: $MODE"
+    echo "Usage: $0 {tun0|tun1|both}"
+    exit 1
+fi
+
+
 echo "[INFO] Stopping background WireGuard services"
 
 for service in "${SERVICES[@]}"; do
@@ -63,14 +69,14 @@ echo "[INFO] Waiting for services to settle"
 sleep 2
 
 
-echo "[INFO] Starting WireGuard Optimizer for both interfaces"
+echo "[INFO] Starting WireGuard Optimizer for $MODE"
 
-if ! "$OPTIMIZER" both; then
+if ! "$OPTIMIZER" "$MODE"; then
     echo "[ERROR] WireGuard optimization failed"
     exit 1
 fi
 
 
-echo "[INFO] Daily WireGuard optimization completed successfully"
+echo "[INFO] WireGuard optimization for $MODE completed successfully"
 
 exit 0
